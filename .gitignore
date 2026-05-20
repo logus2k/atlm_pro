@@ -1,2 +1,19 @@
+# Virtual environment
 .venv_atlm_pro
+
+# Data (raw datasets + processed artifacts — large, regenerable)
 data
+
+# Model / training outputs
+outputs/
+runs/
+wandb/
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/

@@ -1,0 +1,21 @@
+# Stage 1-2 — data acquisition + cleaning configuration.
+
+paths:
+  djinni_raw: data/jobs/djinni/train-00000-of-00001.parquet
+  linkedin_dir: data/jobs/linkedin
+  processed_dir: data/processed
+
+# Djinni — core train/val/test dataset (IT job postings).
+djinni:
+  min_desc_chars: 200       # drop stub postings
+  max_desc_chars: 8000      # drop outlier walls of text
+  require_english: true     # keep only Long Description_lang == 'en'
+
+# LinkedIn — out-of-domain test set (cross-industry). Never used for training.
+linkedin:
+  min_desc_chars: 200
+  max_desc_chars: 15000
+  drop_duplicate_descriptions: true   # ~16k reposts share identical text
+
+# Reproducibility.
+seed: 42

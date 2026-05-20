@@ -1,0 +1,37 @@
+# atlm_pro — dependencies
+#
+# After the first successful install, freeze exact versions with:
+#   .venv_atlm_pro/bin/pip freeze > requirements.lock.txt
+# for reproducible academic results.
+
+# --- Stage 1-2: data acquisition + cleaning + exploration ---
+pandas
+pyarrow
+pyyaml
+matplotlib
+
+# --- Notebook execution (dev) ---
+nbclient
+nbconvert
+ipykernel
+
+# --- Stage 5: fine-tuning ---
+torch
+transformers
+datasets
+peft
+trl
+accelerate
+bitsandbytes        # optional: 4/8-bit quantization
+
+# --- Stage 6: evaluation ---
+evaluate
+rouge-score
+bert-score
+scikit-learn
+
+# --- Stage 3: teacher LLM client (provider TBD) ---
+# Uncomment the one matching the chosen teacher:
+# anthropic         # Claude API
+# openai            # OpenAI API
+# (local teacher uses transformers/vllm — no extra dep)

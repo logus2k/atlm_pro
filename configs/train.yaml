@@ -1,0 +1,31 @@
+# MP1 — continued pretraining of SmolLM2-135M on the job-postings domain.
+# Experiment knob: full fine-tuning vs LoRA  (run: train.py --mode full|lora).
+
+model: HuggingFaceTB/SmolLM2-135M     # base model (NOT -Instruct: this is continued pretraining)
+seed: 42
+block_size: 1024
+
+data:
+  train: data/processed/mp1/train.jsonl
+  val: data/processed/mp1/val.jsonl
+
+training:                  # held constant across both modes
+  epochs: 3
+  per_device_batch_size: 16
+  grad_accum: 1
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  bf16: true
+  eval_strategy: steps
+  eval_steps: 50
+  logging_steps: 10
+
+modes:                     # the experiment — only this section differs
+  full:
+    learning_rate: 5.0e-5  # standard range for full continued pretraining
+  lora:
+    learning_rate: 2.0e-4  # LoRA adapters need a higher LR than full FT
+    lora_r: 16
+    lora_alpha: 32
+    lora_dropout: 0.05
+    lora_target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
