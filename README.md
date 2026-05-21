@@ -66,9 +66,18 @@ The pipeline is three steps. All paths and hyperparameters live in
 .venv_atlm_pro/bin/python src/evaluate_mp1.py
 ```
 
+Optionally, test the trained model interactively (it is a *text completer* —
+give it the start of a job posting and it continues):
+
+```bash
+.venv_atlm_pro/bin/python src/generate_mp1.py --model all --prompt "Senior Data Engineer"
+.venv_atlm_pro/bin/python src/generate_mp1.py --model lora            # REPL
+```
+
 The same logic, runnable cell-by-cell, is in
 [src/atlm_mp1_v2.ipynb](src/atlm_mp1_v2.ipynb) (kernel: `atlm_pro`) — dataset
-exploration (§1–4), continued pretraining (§5) and results (§6).
+exploration (§1–3), continued pretraining (§4), results (§5) and interactive
+testing (§6).
 
 ## Reproducibility
 
@@ -95,7 +104,7 @@ exploration (§1–4), continued pretraining (§5) and results (§6).
 
 ```
 configs/    data.yaml (corpus), train.yaml (training)
-src/        prepare_corpus.py, train.py, evaluate_mp1.py
+src/        prepare_corpus.py, train.py, evaluate_mp1.py, generate_mp1.py
             atlm_mp1_v2.ipynb  — the MP1 notebook (EDA + training + results)
 data/       jobs/ (raw, gitignored)  ·  processed/mp1/ (built corpus)
 outputs/    trained checkpoints + evaluation
