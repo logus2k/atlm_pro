@@ -1,8 +1,10 @@
 # atlm_pro — dependencies
 #
 # After the first successful install, freeze exact versions with:
-#   .venv_atlm_pro/bin/pip freeze > requirements.lock.txt
-# for reproducible academic results.
+#   .venv_atlm_pro/bin/pip freeze --local > requirements.lock.txt
+# for reproducible academic results. The --local flag is required: this shell
+# sources ROS (Jazzy), which puts /opt/ros/.../site-packages on sys.path, so a
+# plain `pip freeze` would sweep in ~166 unrelated ROS packages.
 
 # --- Stage 1-2: data acquisition + cleaning + exploration ---
 pandas

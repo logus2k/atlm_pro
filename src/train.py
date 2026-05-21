@@ -9,6 +9,9 @@ Everything else is held constant via configs/train.yaml.
 Outputs (per mode) to outputs/mp1-<mode>/: the model/adapter, log_history.json
 (loss curves) and summary.json.
 """
+import os
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 import argparse
 import itertools
 import json

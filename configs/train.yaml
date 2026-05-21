@@ -11,8 +11,8 @@ data:
 
 training:                  # held constant across both modes
   epochs: 3
-  per_device_batch_size: 16
-  grad_accum: 1
+  per_device_batch_size: 4
+  grad_accum: 4
   warmup_ratio: 0.03
   weight_decay: 0.01
   bf16: true
