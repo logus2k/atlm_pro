@@ -2,7 +2,7 @@
 
 Date: 2026-05-22
 
-This is the plan to bring Mini-Assignment 1 (MP1) to full coverage of the
+This is the plan to bring Mini-Assignment 1 to full coverage of the
 assignment brief. The deliverable is the notebook `src/atlm_mp1_v4.ipynb`, which
 serves two roles at once: the reproducible code, and the source of the technical
 report (an exporter converts it into a Word document).
@@ -22,8 +22,8 @@ embedding analysis (Section 2.8) runs as a true semantic analysis rather than a
 vocabulary-based fallback. `requirements.txt` and `requirements.lock.txt` were
 updated.
 
-The notebook is now being run end to end (phase B). The remaining work, phase C,
-closes the gaps identified against the assignment brief.
+The notebook has been run end to end (phase B), cleanly. The remaining work,
+phase C, closes the gaps identified against the assignment brief.
 
 ## What the brief requires and the notebook already covers
 
