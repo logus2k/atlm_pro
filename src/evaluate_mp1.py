@@ -1,12 +1,14 @@
 """MP1 — evaluate continued pretraining.
 
 Perplexity for base vs full-FT vs LoRA, on in-domain (Djinni test) and
-out-of-domain (LinkedIn) text, plus greedy sample generations from each model.
+out-of-domain (LinkedIn) text, plus greedy sample generations.
 
-  .venv_atlm_pro/bin/python src/evaluate_mp1.py
+Each run lives under `outputs/<run>/` (`full/`, `lora/`); results are written to
+`outputs/<run>/eval.json`.
 
-Results -> outputs/mp1_eval.json
+  .venv_atlm_pro/bin/python src/evaluate_mp1.py --run mp1-360m
 """
+import argparse
 import json
 import math
 from pathlib import Path
@@ -16,16 +18,11 @@ from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = "HuggingFaceTB/SmolLM2-360M"
+OUTPUTS = ROOT / "outputs"
 BLOCK = 1024
 DEVICE = "cuda"
 DTYPE = torch.bfloat16
 
-MODELS = {
-    "base": BASE,
-    "full": str(ROOT / "outputs/mp1-full"),
-    "lora": str(ROOT / "outputs/mp1-lora"),
-}
 EVAL_SETS = {
     "in_domain": ROOT / "data/processed/mp1/test.jsonl",
     "ood": ROOT / "data/processed/mp1/ood_test.jsonl",
@@ -35,6 +32,12 @@ PROMPTS = [
     "The ideal candidate will",
     "Responsibilities:\n-",
 ]
+
+
+def base_model_id(run):
+    """Base model id, read from the run's LoRA adapter config — never hardcoded."""
+    cfg = json.loads((OUTPUTS / run / "lora" / "adapter_config.json").read_text())
+    return cfg["base_model_name_or_path"]
 
 
 def make_blocks(jsonl, tokenizer):
@@ -59,18 +62,27 @@ def perplexity(model, blocks):
     return math.exp(tot_loss / tot_tok)
 
 
-def load_model(name, spec):
-    if name == "lora":
+def load_model(name, run):
+    """Load 'base' | 'full' | 'lora' for a run -> model, eval mode on DEVICE."""
+    run_dir = OUTPUTS / run
+    if name == "base":
+        model = AutoModelForCausalLM.from_pretrained(base_model_id(run))
+    elif name == "lora":
         from peft import PeftModel
-        model = AutoModelForCausalLM.from_pretrained(BASE)
-        model = PeftModel.from_pretrained(model, spec)
-    else:
-        model = AutoModelForCausalLM.from_pretrained(spec)
+        model = AutoModelForCausalLM.from_pretrained(base_model_id(run))
+        model = PeftModel.from_pretrained(model, str(run_dir / "lora"))
+    else:  # full
+        model = AutoModelForCausalLM.from_pretrained(str(run_dir / "full"))
     return model.to(DEVICE, dtype=DTYPE).eval()
 
 
 def main():
-    tokenizer = AutoTokenizer.from_pretrained(BASE)
+    ap = argparse.ArgumentParser(description="Evaluate an MP1 run.")
+    ap.add_argument("--run", required=True,
+                    help="output folder under outputs/ (e.g. mp1-135m, mp1-360m)")
+    run = ap.parse_args().run
+
+    tokenizer = AutoTokenizer.from_pretrained(base_model_id(run))
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -79,9 +91,9 @@ def main():
         print(f"{n}: {len(b)} blocks")
 
     results = {"perplexity": {}, "generations": {}}
-    for name, spec in MODELS.items():
+    for name in ("base", "full", "lora"):
         print(f"\n--- {name} ---", flush=True)
-        model = load_model(name, spec)
+        model = load_model(name, run)
 
         results["perplexity"][name] = {}
         for sname, b in blocks.items():
@@ -101,12 +113,12 @@ def main():
         del model
         torch.cuda.empty_cache()
 
-    out_path = ROOT / "outputs/mp1_eval.json"
+    out_path = OUTPUTS / run / "eval.json"
     out_path.write_text(json.dumps(results, indent=2, ensure_ascii=False))
 
     print("\n=== PERPLEXITY (lower = better) ===")
     print(f"  {'model':6} | {'in-domain':>10} | {'OOD':>10}")
-    for m in MODELS:
+    for m in ("base", "full", "lora"):
         pp = results["perplexity"][m]
         print(f"  {m:6} | {pp['in_domain']:>10} | {pp['ood']:>10}")
     print(f"\nfull results (incl. generations) -> {out_path}")

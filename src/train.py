@@ -3,10 +3,10 @@
 Experiment knob:  --mode full  (full fine-tuning)  vs  --mode lora  (LoRA).
 Everything else is held constant via configs/train.yaml.
 
-  .venv_atlm_pro/bin/python src/train.py --mode full
-  .venv_atlm_pro/bin/python src/train.py --mode lora
+  .venv_atlm_pro/bin/python src/train.py --run mp1-360m --mode full
+  .venv_atlm_pro/bin/python src/train.py --run mp1-360m --mode lora
 
-Outputs (per mode) to outputs/mp1-<mode>/: the model/adapter, log_history.json
+Outputs (per mode) to outputs/<run>/<mode>/: the model/adapter, log_history.json
 (loss curves) and summary.json.
 """
 import os
@@ -53,13 +53,15 @@ def tokenize_and_chunk(jsonl_path, tokenizer, block_size):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=["full", "lora"], required=True)
+    ap.add_argument("--run", required=True,
+                    help="output folder under outputs/ (e.g. mp1-135m, mp1-360m)")
     args = ap.parse_args()
 
     cfg = yaml.safe_load((ROOT / "configs/train.yaml").read_text())
     set_seed(cfg["seed"])
     mcfg = cfg["modes"][args.mode]
     tcfg = cfg["training"]
-    out_dir = ROOT / "outputs" / f"mp1-{args.mode}"
+    out_dir = ROOT / "outputs" / args.run / args.mode
 
     print(f"=== MP1 continued pretraining — mode: {args.mode} ===", flush=True)
     tokenizer = AutoTokenizer.from_pretrained(cfg["model"])

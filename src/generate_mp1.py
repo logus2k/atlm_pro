@@ -1,51 +1,65 @@
 """MP1 — interactive generation.
 
-Feed the continued-pretrained model your own prompts and watch it complete a
-job posting. MP1 is a *continued-pretraining* model — a text completer, not a
-chat model: give it the START of a posting and it continues. Instruction-style
-prompts ("write a JD for ...") are MP2's job.
+Feed a continued-pretrained model your own prompts and watch it complete a job
+posting. MP1 is a *continued-pretraining* model — a text completer, not a chat
+model: give it the START of a posting and it continues.
+
+Each training run lives under `outputs/<run>/` (e.g. `outputs/mp1-360m/`),
+holding `full/`, `lora/` and `eval.json`. Pass `--run` to pick which.
 
   # one-shot
-  .venv_atlm_pro/bin/python src/generate_mp1.py --model lora --prompt "We are looking for"
+  .venv_atlm_pro/bin/python src/generate_mp1.py --run mp1-360m --model lora --prompt "We are looking for"
 
-  # compare all three checkpoints on the same prompt
-  .venv_atlm_pro/bin/python src/generate_mp1.py --model all --prompt "Senior Data Engineer"
+  # compare base / full / lora on the same prompt
+  .venv_atlm_pro/bin/python src/generate_mp1.py --run mp1-360m --model all --prompt "Senior Data Engineer"
 
   # REPL — type one prompt per line; a blank line or Ctrl-D quits
-  .venv_atlm_pro/bin/python src/generate_mp1.py --model lora
+  .venv_atlm_pro/bin/python src/generate_mp1.py --run mp1-135m --model lora
 """
 import argparse
+import json
 from pathlib import Path
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = "HuggingFaceTB/SmolLM2-360M"
+OUTPUTS = ROOT / "outputs"
+VALID = ("base", "full", "lora")
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16
 
-CHECKPOINTS = {
-    "base": BASE,                              # untrained reference
-    "full": str(ROOT / "outputs" / "mp1-full"),  # full fine-tuning
-    "lora": str(ROOT / "outputs" / "mp1-lora"),  # LoRA adapter (base + adapter)
-}
+
+def base_model_id(run):
+    """Base model id, read from the run's LoRA adapter config — never hardcoded,
+    so it always matches whatever model that run was trained on."""
+    cfg = json.loads((OUTPUTS / run / "lora" / "adapter_config.json").read_text())
+    return cfg["base_model_name_or_path"]
 
 
-def load_model(name):
-    """Load 'base' | 'full' | 'lora' -> (model, tokenizer), eval mode on DEVICE."""
-    if name not in CHECKPOINTS:
-        raise ValueError(f"model must be one of {list(CHECKPOINTS)} (or 'all')")
-    tokenizer = AutoTokenizer.from_pretrained(BASE)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+def load_model(name, run):
+    """Load 'base' | 'full' | 'lora' for a run -> (model, tokenizer), eval mode.
+
+    `run` selects the output folder, e.g. 'mp1-360m' -> outputs/mp1-360m/."""
+    if name not in VALID:
+        raise ValueError(f"model must be one of {list(VALID)} (or 'all')")
+    run_dir = OUTPUTS / run
 
     if name == "lora":
         from peft import PeftModel
-        model = AutoModelForCausalLM.from_pretrained(BASE)
-        model = PeftModel.from_pretrained(model, CHECKPOINTS["lora"])
-    else:
-        model = AutoModelForCausalLM.from_pretrained(CHECKPOINTS[name])
+        tokenizer = AutoTokenizer.from_pretrained(str(run_dir / "lora"))
+        model = AutoModelForCausalLM.from_pretrained(base_model_id(run))
+        model = PeftModel.from_pretrained(model, str(run_dir / "lora"))
+    elif name == "full":
+        tokenizer = AutoTokenizer.from_pretrained(str(run_dir / "full"))
+        model = AutoModelForCausalLM.from_pretrained(str(run_dir / "full"))
+    else:  # base
+        base = base_model_id(run)
+        tokenizer = AutoTokenizer.from_pretrained(base)
+        model = AutoModelForCausalLM.from_pretrained(base)
+
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
     return model.to(DEVICE, dtype=DTYPE).eval(), tokenizer
 
 
@@ -55,8 +69,7 @@ def generate(model, tokenizer, prompt, max_new_tokens=120, temperature=0.8,
     """Complete `prompt`. Returns the full decoded string (prompt + continuation).
 
     Sampling (temperature / top-p) is the default; pass greedy=True for
-    deterministic decoding. repetition_penalty curbs the loop-degeneration a
-    135M model is prone to.
+    deterministic decoding. repetition_penalty curbs loop-degeneration.
     """
     torch.manual_seed(seed)
     enc = tokenizer(prompt, return_tensors="pt").to(DEVICE)
@@ -72,6 +85,8 @@ def generate(model, tokenizer, prompt, max_new_tokens=120, temperature=0.8,
 
 def main():
     ap = argparse.ArgumentParser(description="Interactive MP1 text generation.")
+    ap.add_argument("--run", default="mp1-360m",
+                    help="output folder under outputs/ (e.g. mp1-135m, mp1-360m)")
     ap.add_argument("--model", default="lora",
                     choices=["base", "full", "lora", "all"],
                     help="checkpoint to use; 'all' compares the three")
@@ -86,8 +101,8 @@ def main():
     args = ap.parse_args()
 
     names = ["base", "full", "lora"] if args.model == "all" else [args.model]
-    print(f"loading {names} on {DEVICE} ...", flush=True)
-    loaded = {n: load_model(n) for n in names}
+    print(f"loading {names} from outputs/{args.run}/ on {DEVICE} ...", flush=True)
+    loaded = {n: load_model(n, args.run) for n in names}
     gen_kwargs = dict(max_new_tokens=args.max_new_tokens,
                       temperature=args.temperature, top_p=args.top_p,
                       greedy=args.greedy, seed=args.seed)
