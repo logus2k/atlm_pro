@@ -1,39 +1,20 @@
-# atlm_pro — dependencies
-#
-# After the first successful install, freeze exact versions with:
-#   .venv_atlm_pro/bin/pip freeze --local > requirements.lock.txt
-# for reproducible academic results. The --local flag is required: this shell
-# sources ROS (Jazzy), which puts /opt/ros/.../site-packages on sys.path, so a
-# plain `pip freeze` would sweep in ~166 unrelated ROS packages.
-
-# --- Stage 1-2: data acquisition + cleaning + exploration ---
 pandas
 pyarrow
 pyyaml
 matplotlib
-scikit-learn        # EDA §11: TF-IDF + PCA semantic-cluster analysis
-
-# --- Notebook execution (dev) ---
+scikit-learn
+sentence-transformers
+umap-learn
 nbclient
 nbconvert
 ipykernel
-
-# --- Stage 5: fine-tuning ---
 torch
 transformers
 datasets
 peft
 trl
 accelerate
-bitsandbytes        # optional: 4/8-bit quantization
-
-# --- Stage 6: evaluation ---
+bitsandbytes
 evaluate
 rouge-score
 bert-score
-
-# --- Stage 3: teacher LLM client (provider TBD) ---
-# Uncomment the one matching the chosen teacher:
-# anthropic         # Claude API
-# openai            # OpenAI API
-# (local teacher uses transformers/vllm — no extra dep)
