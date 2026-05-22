@@ -21,7 +21,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = "HuggingFaceTB/SmolLM2-135M"
+BASE = "HuggingFaceTB/SmolLM2-360M"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16
 

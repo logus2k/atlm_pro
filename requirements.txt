@@ -11,6 +11,7 @@ pandas
 pyarrow
 pyyaml
 matplotlib
+scikit-learn        # EDA §11: TF-IDF + PCA semantic-cluster analysis
 
 # --- Notebook execution (dev) ---
 nbclient
@@ -30,7 +31,6 @@ bitsandbytes        # optional: 4/8-bit quantization
 evaluate
 rouge-score
 bert-score
-scikit-learn
 
 # --- Stage 3: teacher LLM client (provider TBD) ---
 # Uncomment the one matching the chosen teacher:

@@ -1,4 +1,4 @@
-"""MP1 — continued pretraining of SmolLM2-135M on the job-postings domain.
+"""MP1 — continued pretraining of SmolLM2-360M on the job-postings domain.
 
 Experiment knob:  --mode full  (full fine-tuning)  vs  --mode lora  (LoRA).
 Everything else is held constant via configs/train.yaml.
@@ -75,8 +75,10 @@ def main():
             target_modules=mcfg["lora_target_modules"], task_type="CAUSAL_LM"))
         model.print_trainable_parameters()
     else:
-        total = sum(p.numel() for p in model.parameters())
-        print(f"full fine-tuning — trainable params: {total:,} (100%)", flush=True)
+        print("full fine-tuning — all parameters trainable", flush=True)
+
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total_params = sum(p.numel() for p in model.parameters())
 
     block = cfg["block_size"]
     train_ds = tokenize_and_chunk(ROOT / cfg["data"]["train"], tokenizer, block)
@@ -121,6 +123,8 @@ def main():
     summary = {
         "mode": args.mode,
         "learning_rate": float(mcfg["learning_rate"]),
+        "trainable_params": trainable_params,
+        "total_params": total_params,
         "epochs": tcfg["epochs"],
         "train_blocks": len(train_ds),
         "minutes": round(minutes, 1),

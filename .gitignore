@@ -12,6 +12,9 @@ wandb/
 # Secrets
 .env
 
+# Claude Code personal/local settings
+.claude/settings.local.json
+
 # Python
 __pycache__/
 *.py[cod]

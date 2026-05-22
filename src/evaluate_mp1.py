@@ -16,7 +16,7 @@ from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = "HuggingFaceTB/SmolLM2-135M"
+BASE = "HuggingFaceTB/SmolLM2-360M"
 BLOCK = 1024
 DEVICE = "cuda"
 DTYPE = torch.bfloat16

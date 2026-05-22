@@ -1,7 +1,7 @@
-# MP1 — continued pretraining of SmolLM2-135M on the job-postings domain.
+# MP1 — continued pretraining of SmolLM2-360M on the job-postings domain.
 # Experiment knob: full fine-tuning vs LoRA  (run: train.py --mode full|lora).
 
-model: HuggingFaceTB/SmolLM2-135M     # base model (NOT -Instruct: this is continued pretraining)
+model: HuggingFaceTB/SmolLM2-360M     # base model (NOT -Instruct: this is continued pretraining)
 seed: 42
 block_size: 1024
 
