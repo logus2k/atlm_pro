@@ -16,11 +16,11 @@ The implementation is split into four standalone scripts plus one notebook:
 - `src/generate_mp1.py` - interactive generation (one-shot, compare, or REPL).
 - `src/atlm_mp1_v4.ipynb` - the narrative, the analysis, and the report.
 
-Configuration lives in `configs/data.yaml` (cleaning thresholds) and `configs/train.yaml` (the training knobs and the experiment matrix). Splitting configuration out of code is what lets the full and LoRA runs differ in exactly one place.
+The training knobs and the experiment matrix live in `configs/train.yaml`, read by `train.py` at startup; the data-cleaning constants are hardcoded at the top of `src/prepare_corpus.py`. Splitting the training configuration out of code is what lets the full and LoRA runs differ in exactly one place. (An older `configs/data.yaml` sketch exists in the repo but is not wired in: `prepare_corpus.py` does not import yaml, and the constants in the script are what actually ran.)
 
 ## 2. Environment and reproducibility
 
-Everything runs in a project virtual environment, `.venv_atlm_pro` (Python 3.12), on a single NVIDIA RTX 4090 (24 GB) under WSL2. Exact package versions are pinned in `requirements.lock.txt`.
+Everything runs in a project virtual environment, `.venv_atlm_pro` (Python 3.12), on WSL2 (Ubuntu 24.04 on Windows 11). Two consumer GPUs were used during development, NVIDIA RTX 5060 Ti (16 GB) and NVIDIA RTX 4090 (24 GB); the 4090 carried the canonical runs whose numbers are reported here. Exact package versions are pinned in `requirements.lock.txt`.
 
 A fixed seed of 42 is used everywhere it matters: the corpus shuffle, training (`set_seed`), and sampling. GPU training is not bit-for-bit deterministic even with a fixed seed, so figures vary slightly between runs; in practice the perplexity numbers reproduced exactly across reruns of the 360M experiment.
 
@@ -66,7 +66,7 @@ rng.shuffle(lk_texts)
 ood = lk_texts[:N_OOD]
 ```
 
-Output: `data/processed/mp1/{train,val,test,ood_test}.jsonl` at 12,000 / 1,000 / 1,000 / 1,000 documents. The 12k train documents come to about 19 to 22 MB of text, comfortably above the brief's 1 to 10 MB floor, which is a deliberate choice: more domain text gives the adaptation more to work with, and the 4090 can train on it in a reasonable time.
+Output: `data/processed/mp1/{train,val,test,ood_test}.jsonl` at 12,000 / 1,000 / 1,000 / 1,000 documents. The 12k train documents come to about 22.7 MB of text (roughly 5.4 million SmolLM2-360M tokens), comfortably above the brief's 1 to 10 MB floor, which is a deliberate choice: more domain text gives the adaptation more to work with, and the 4090 can train on it in a reasonable time. (The `# ~19 MB` comment in the script above was an early pre-tokenisation estimate; the on-disk number is what the run actually consumed.)
 
 Rationale for the LinkedIn deduplication: roughly 16k LinkedIn rows are reposts that share identical description text, so without `drop_duplicates` the out-of-domain test set would be skewed by copies.
 
@@ -163,6 +163,8 @@ ppl = math.exp(final["eval_loss"])
 (out_dir / "log_history.json").write_text(json.dumps(trainer.state.log_history, indent=1))
 (out_dir / "summary.json").write_text(json.dumps(summary, indent=1))
 ```
+
+Each run produces the expected wall-clock and trainable-parameter footprint on the 4090. Full fine-tuning updates all 361.8M model parameters and takes about 42 minutes; LoRA updates only 8.7M parameters (2.3 percent of the model) and takes about 13 minutes, roughly a third of the time.
 
 Decisions and their rationale:
 
