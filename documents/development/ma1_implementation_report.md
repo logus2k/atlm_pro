@@ -1,6 +1,8 @@
 # Mini-Assignment 1 - Implementation Report
 
-This document records how Mini-Assignment 1 (continued pretraining) was built: the development steps in the order they happened, what each step implemented, the most relevant code that carries the work, and the reasoning behind the options that were chosen. It is a development log, not the academic report. The academic report is the notebook `src/atlm_mp1_v4.ipynb`, which doubles as the reproducible code and as the source exported to the Word deliverable.
+This document records how Mini-Assignment 1 (continued pretraining) was built: the development steps in the order they happened, what each step implemented, the most relevant code that carries the work, and the reasoning behind the options that were chosen. It is a development log, not the academic report. The academic report is the notebook [`src/atlm_mp1_v4.ipynb`](../../src/atlm_mp1_v4.ipynb), which doubles as the reproducible code and as the source exported to the Word deliverable submitted as [`mp1/delivery/atlm_ma1_report_groupc.pdf`](../../mp1/delivery/atlm_ma1_report_groupc.pdf).
+
+A companion document, [`ma1_workflow.md`](ma1_workflow.md), walks the same MA1 work step by step as a workflow narrative. The MA1 artefacts that this report describes are inputs to Mini-Assignment 2 (alignment via DPO over RLAIF), which is documented in [`ma2_implementation_report.md`](ma2_implementation_report.md); §11 below records the downstream usage explicitly.
 
 ## 1. Goal and shape of the work
 
@@ -260,6 +262,18 @@ These are the process-level points, captured in the notebook's Section 5.7:
 
 The choice of the SmolLM2 family itself was deliberate: it is an open, modern small-model family, and crucially all sizes share one tokenizer, which made the 135M-to-360M comparison friction-free (no tokeniser remap, the corpus and the evaluation code are identical across sizes). 360M was chosen as the main model because it fits the 4090 for full fine-tuning and clearly beats 135M at roughly double the compute.
 
-## 11. Deliverables
+## 11. Deliverables and downstream usage
 
-The frozen MA1 notebook is `src/atlm_mp1_v4.ipynb` (113 cells, six CRISP-DM phases: Business Understanding, Data Understanding, Data Preparation, Modeling, Evaluation, Deployment). The released bundle is `mp1/delivery/`: `atlm_ma1_groupc.ipynb`, `atlm_ma1_report_groupc.pdf`, `README.md`, a pinned `requirements.txt`, and `src/generate_mp1.py`. Trained artifacts live under `outputs/mp1-360m/{full,lora}/` with `outputs/mp1-360m/eval.json`, and the 135M baseline under `outputs/mp1-135m/`. The 360M LoRA adapter is the starting point for Mini-Assignment 2.
+### 11.1 MA1 deliverables
+
+The frozen MA1 notebook is [`src/atlm_mp1_v4.ipynb`](../../src/atlm_mp1_v4.ipynb) (113 cells, six CRISP-DM phases: Business Understanding, Data Understanding, Data Preparation, Modeling, Evaluation, Deployment). The released bundle is [`mp1/delivery/`](../../mp1/delivery/): `atlm_ma1_groupc.ipynb`, `atlm_ma1_report_groupc.pdf`, `README.md`, a pinned `requirements.txt`, and `src/generate_mp1.py`. Trained artifacts live under `outputs/mp1-360m/{full,lora}/` with `outputs/mp1-360m/eval.json`, and the 135M baseline under `outputs/mp1-135m/`.
+
+### 11.2 Downstream usage in Mini-Assignment 2
+
+The 360M LoRA adapter is the starting point for Mini-Assignment 2. Three concrete handoffs:
+
+1. **Merge into a consolidated base.** [`src/ma2/merge_ma1_lora.py`](../../src/ma2/merge_ma1_lora.py) loads `outputs/mp1-360m/lora/`, merges the LoRA into `HuggingFaceTB/SmolLM2-360M`, and saves the result to `outputs/mp1-360m/merged/` (694 MB). MA2's SFT and DPO each train a fresh LoRA on top of this merged base, so the MA1 adapter never has to be carried into a stacked-adapter configuration; see ma2_implementation_report.md §4 for the rationale.
+2. **SFT corpus generation.** The two Djinni and LinkedIn datasets that fed continued pretraining in §3-4 above are also the input to MA2's ETL agent (`atlm_teacher`, a Gemma 4 model served by `agent_server`), which converts raw postings into (query, structured posting) pairs for supervised fine-tuning. The result is `data/processed/converted.jsonl` (2,507 records, roughly 7,500 training pairs); see ma2_implementation_report.md §3.
+3. **The 360M base as the eval baseline.** MA2's three-way (now four-way) evaluation in Section 6 of `src/ma2/atlm_ma2_v5_AC.ipynb` includes the raw SmolLM2-360M base (no MA1 LoRA) as one leg, separate from the merged MA1+SFT model used in MA1's Section 5.7 sanity check. The two baselines are explicitly distinguished in the MA2 prose to avoid confusion.
+
+The MA1 work is therefore not just a step on the path to MA2: it is the upstream artefact that fixes the student model, fixes the corpus, and defines the in-domain baseline that everything downstream is measured against.
