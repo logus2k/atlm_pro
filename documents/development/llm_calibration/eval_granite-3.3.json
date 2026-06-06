@@ -1,0 +1,190 @@
+{
+ "summary": {
+  "model": "granite-3.3",
+  "role_probed": "eval_judge",
+  "n_pairs": 5,
+  "n_calls": 10,
+  "parse_fail_pairs": 0,
+  "consistent_pairs": 4,
+  "inconsistent_pairs": 1,
+  "ab_ba_consistency_rate": 0.8,
+  "mean_latency_s": 1.43,
+  "median_latency_s": 1.36,
+  "max_latency_s": 1.98,
+  "min_latency_s": 1.05,
+  "section6_budget_min_at_4w": 1.4,
+  "switch_latency_s": 0.0,
+  "uses_think_chain_calls": 0,
+  "mean_completion_tokens": 258.0,
+  "comparable_to_gemma_n": 4,
+  "agreement_with_gemma_n": 4,
+  "ood03_catches_b01_collapse": {
+   "consistent": true,
+   "winner": "dpo-b03",
+   "expected": "dpo-b03",
+   "catches_b01_collapse": true
+  }
+ },
+ "records": [
+  {
+   "pair": "base_vs_sft",
+   "prompt_id": "ind-01",
+   "ab": {
+    "verdict": "B",
+    "winner": "sft",
+    "latency_s": 1.25,
+    "completion_tokens": 173,
+    "prompt_tokens": 1540,
+    "raw_chars": 804,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "VERDICT: B\n\nCANDIDATE B's job posting is more faithful to the recruiter's request, as it explicitly mentions the required technologies (Python, Django, PostgreSQL, AWS services), the need for AWS experience, and the role's focus on building and maintaining services. It also provides a concise summary, required skills, responsibilities, and requirements, avoiding repetition and truncation. The language is professional and inclusive, without any biased or discriminatory phrasing.\n\nCANDIDATE A's posting, while extensive, lacks the necessary structure and completeness. It attempts to cover all aspects but fails to provide a clear summary, distinct sections for required skills, responsibilities, and requirements, and contains redundant descriptions. Therefore, CANDIDATE B's job posting is superior.",
+    "error": null
+   },
+   "ba": {
+    "verdict": "A",
+    "winner": "sft",
+    "latency_s": 1.05,
+    "completion_tokens": 188,
+    "prompt_tokens": 1540,
+    "raw_chars": 771,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "VERDICT: A\n\nCANDIDATE A adheres to the request more closely than CANDIDATE B. It provides a clear and concise summary, required skills, responsibilities, and requirements, all within a single, well-structured section. CANDIDATE B, on the other hand, presents the information in a disorganized and repetitive manner, making it difficult to extract the necessary details.\n\nCANDIDATE A maintains a professional and inclusive tone throughout, using clear and neutral language. CANDIDATE B, however, suffers from excessive repetition and lacks a coherent structure, making it less suitable for the task.\n\nIn conclusion, CANDIDATE A is a better fit for the recruiter's request due to its faithfulness, absence of repetition, completeness, and professional language.\n\nVERDICT: A",
+    "error": null
+   },
+   "consistency": "consistent",
+   "new_judge_winner": "sft",
+   "gemma_winner": "sft",
+   "agreement_with_gemma": true
+  },
+  {
+   "pair": "sft_vs_dpo-b01",
+   "prompt_id": "ind-05",
+   "ab": {
+    "verdict": "B",
+    "winner": "dpo-b01",
+    "latency_s": 1.53,
+    "completion_tokens": 289,
+    "prompt_tokens": 1000,
+    "raw_chars": 1115,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "VERDICT: B\n\nStrengths of CANDIDATE B:\n\n1. Faithfulness to the request: CANDIDATE B's posting accurately reflects the role, technology stack (SQL, dbt, Looker), seniority (2+ years), and constraints (remote work).\n2. Absence of repetition, rambling, or truncation: The posting is concise and well-structured, with no repetition or truncation.\n3. Structure and completeness: All required sections are present and contain substantive, non-empty content.\n4. Professional and inclusive language: The language used is clear, neutral, and free of biased or discriminatory phrasing.\n\nWeaknesses of CANDIDATE A:\n\n1. While CANDIDATE A's posting is also faithful to the request, it contains some repetition (e.g., \"data visualization tools like d3.js\" and \"working with data visualization tools like Looker Dashboard Builder\").\n2. The \"Responsibilities\" section in CANDIDATE A could be more specific about the types of insights the candidate should provide, rather than just \"actionable insights.\"\n\nIn conclusion, CANDIDATE B's posting is better overall due to its clarity, completeness, and professional language.\n\nVERDICT: B",
+    "error": null
+   },
+   "ba": {
+    "verdict": "A",
+    "winner": "dpo-b01",
+    "latency_s": 1.48,
+    "completion_tokens": 284,
+    "prompt_tokens": 1000,
+    "raw_chars": 1180,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "VERDICT: A\n\nStrengths of CANDIDATE A:\n- The posting accurately reflects the role, technology stack (SQL, dbt, Looker), seniority, and constraints (building dashboards, exploring product data).\n- It avoids repetition, rambling, or truncation, presenting comprehensive content in a clear and structured manner.\n- All required sections (Summary, Required Skills, Responsibilities, Requirements) are present, each with substantive, non-empty content.\n- The language is professional and inclusive, free of biased or discriminatory phrasing.\n\nWeaknesses of CANDIDATE B:\n- While it covers the main aspects, the posting lacks the depth and specificity of CANDIDATE A, particularly in the Required Skills and Responsibilities sections.\n- The inclusion of 'd3.js' as a required skill, although not explicitly mentioned in the request, introduces unnecessary ambiguity.\n- The language is generally neutral, but the proficiency level in English is specified as 'intermediate', which is lower than the requested 'upper-intermediate'.\n\nIn conclusion, CANDIDATE A is a superior choice due to its faithfulness to the request, absence of flaws, completeness, and professional language.\n\nVERDICT: A",
+    "error": null
+   },
+   "consistency": "consistent",
+   "new_judge_winner": "dpo-b01",
+   "gemma_winner": "dpo-b01",
+   "agreement_with_gemma": true
+  },
+  {
+   "pair": "dpo-b01_vs_dpo-b03",
+   "prompt_id": "ind-10",
+   "ab": {
+    "verdict": "A",
+    "winner": "dpo-b01",
+    "latency_s": 1.36,
+    "completion_tokens": 244,
+    "prompt_tokens": 1045,
+    "raw_chars": 1071,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "VERDICT: A\n\nStrengths of Candidate A:\n- The posting accurately reflects the role, technology stack, seniority, and constraints (e.g., leading application security, threat modeling, code review, and collaboration with multiple teams).\n- The content is well-structured, complete, and free of repetition, rambling, or truncation.\n- The language is professional and inclusive, avoiding biased or discriminatory phrasing.\n\nWeaknesses of Candidate B:\n- While it covers the required sections, the posting does not emphasize the leadership aspect as strongly as Candidate A.\n- The responsibilities and requirements sections in Candidate B seem more focused on tool development and security testing, which may not fully align with the recruiter's need for a team leader in application security.\n- The language, while appropriate, lacks the same level of detail and precision as Candidate A.\n\nIn conclusion, Candidate A's posting is more aligned with the recruiter's request, demonstrates better structure and completeness, and uses professional and inclusive language.\n\nVERDICT: A",
+    "error": null
+   },
+   "ba": {
+    "verdict": "B",
+    "winner": "dpo-b01",
+    "latency_s": 1.75,
+    "completion_tokens": 325,
+    "prompt_tokens": 1045,
+    "raw_chars": 1461,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "VERDICT: B\n\nStrengths of Candidate B:\n\n1. Faithfulness to the Request: Candidate B's job posting accurately reflects the role's focus on leading application security, threat modeling, and code review across multiple product teams. It emphasizes the need for a proactive individual to drive security initiatives and ensure the security of critical applications.\n\n2. Absence of Repetition, Rambling, or Truncation: The posting is concise and well-structured, with no repetition or truncation. It provides detailed information about required skills, responsibilities, and requirements.\n\n3. Structure and Completeness: All four required sections are present and substantively filled. The posting includes a clear summary, detailed required skills, comprehensive responsibilities, and specific requirements, all of which are essential for a comprehensive job posting.\n\n4. Professional and Inclusive Language: The language used is professional, neutral, and free of biased or discriminatory phrasing. It promotes inclusivity by not specifying gender-specific pronouns and focusing on skills and experiences rather than personal attributes.\n\nWeaknesses of Candidate A:\n\n1. While Candidate A's posting is also faithful to the request, it lacks the depth and specificity of Candidate B's in certain areas, such as security tools (Splunk, Loggly), security frameworks (NIST, ISO 27001), and the explicit requirement for upper-intermediate English proficiency.\n\nVERDICT: B",
+    "error": null
+   },
+   "consistency": "consistent",
+   "new_judge_winner": "dpo-b01",
+   "gemma_winner": "dpo-b01",
+   "agreement_with_gemma": true
+  },
+  {
+   "pair": "dpo-b01_vs_dpo-b02",
+   "prompt_id": "ind-09",
+   "ab": {
+    "verdict": "A",
+    "winner": "dpo-b01",
+    "latency_s": 1.22,
+    "completion_tokens": 218,
+    "prompt_tokens": 958,
+    "raw_chars": 901,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "VERDICT: A\n\nCANDIDATE A is better than CANDIDATE B for the following reasons:\n\n1. Faithfulness to the request: Both postings accurately reflect the role, technology stack (C and Rust), seniority (4+ years), and constraints (IoT devices, low-power, embedded systems).\n\n2. Absence of repetition, rambling, or truncation: Both postings are well-structured and free of repetition or truncation.\n\n3. Structure and completeness: Both postings include all required sections ('Summary', 'Required Skills', 'Responsibilities', and 'Requirements') with substantive content.\n\n4. Professional and inclusive language: Both postings use clear, neutral language, avoiding biased or discriminatory phrasing.\n\nCANDIDATE A has a slightly more detailed 'Required Skills' section, providing a more comprehensive list of necessary abilities and knowledge. Both postings are of equal quality in terms of length and content.",
+    "error": null
+   },
+   "ba": {
+    "verdict": "A",
+    "winner": "dpo-b02",
+    "latency_s": 1.32,
+    "completion_tokens": 246,
+    "prompt_tokens": 958,
+    "raw_chars": 1205,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "VERDICT: A\n\nStrengths of Candidate A:\n- Both the summary and required skills sections accurately reflect the recruiter's request for an Embedded Software Engineer with expertise in C and Rust for low-power IoT devices.\n- The responsibilities and requirements sections are comprehensive, covering firmware development, hardware platform compatibility, performance and reliability, team collaboration, and system design.\n- The posting is free of repetition, rambling, or truncation, maintaining a clear and concise structure.\n\nWeaknesses of Candidate B:\n- While Candidate B also accurately reflects the recruiter's request, it includes an additional, unnecessary skill (experience with embedded software development tools and Linux/embedded operating systems) that is not explicitly mentioned in the request.\n- The additional requirement for 2+ years of experience with embedded hardware platforms is redundant, as the recruiter only specified 4+ years of professional experience in embedded software development.\n\nIn conclusion, Candidate A is a better fit due to its faithfulness to the request, absence of unnecessary information, and complete inclusion of all required sections with substantive content.",
+    "error": null
+   },
+   "consistency": "inconsistent",
+   "new_judge_winner": null,
+   "gemma_winner": null,
+   "agreement_with_gemma": null
+  },
+  {
+   "pair": "dpo-b01_vs_dpo-b03",
+   "prompt_id": "ood-03",
+   "ab": {
+    "verdict": "B",
+    "winner": "dpo-b03",
+    "latency_s": 1.98,
+    "completion_tokens": 371,
+    "prompt_tokens": 1378,
+    "raw_chars": 1524,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "VERDICT: B\n\nStrengths of CANDIDATE B:\n\n1. Faithfulness to the request: The posting accurately reflects the role, technology stack (Elixir, Phoenix, OTP), seniority (2+ years of professional experience), and constraints (microservice architecture, CI/CD).\n2. Absence of repetition, rambling, or truncation: The text is concise and free of repetition, making it easy to read and understand.\n3. Structure and completeness: All required sections are present and contain substantive, non-empty content.\n4. Professional and inclusive language: The language used is clear, neutral, and free of biased or discriminatory phrasing.\n\nWeaknesses of CANDIDATE A:\n\n1. Faithfulness to the request: While the posting mentions Elixir, Phoenix, and OTP, it excessively repeats the same phrase about container orchestration, which is not a required skill for this role.\n2. Absence of repetition, rambling, or truncation: The repetition of \"Container orchestration using Docker\" throughout the posting is unacceptable, despite its length.\n3. Structure and completeness: The \"Required Skills\" section is overly verbose and repetitive, focusing excessively on container orchestration tools.\n4. Professional and inclusive language: Although the language is generally neutral, the excessive repetition of container orchestration tools in the \"Required Skills\" section could be perceived as unprofessional.\n\nIn conclusion, CANDIDATE B provides a more accurate, concise, and well-structured job posting that adheres to the given criteria.\n\nVERDICT: B",
+    "error": null
+   },
+   "ba": {
+    "verdict": "A",
+    "winner": "dpo-b03",
+    "latency_s": 1.36,
+    "completion_tokens": 247,
+    "prompt_tokens": 1378,
+    "raw_chars": 979,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "VERDICT: A\n\nStrengths of CANDIDATE A:\n1. It accurately reflects the request, emphasizing Elixir, Phoenix, and OTP experience, which are crucial for the role.\n2. The posting is concise and free of repetition, avoiding padded lists or truncation.\n3. It includes all four required sections: 'Summary', 'Required Skills', 'Responsibilities', and 'Requirements'.\n4. The language is professional and inclusive, avoiding biased or discriminatory phrasing.\n\nWeaknesses of CANDIDATE B:\n1. The 'Responsibilities' and 'Requirements' sections are overly repetitive and redundant, providing no substantive new content.\n2. The 'Required Skills' section includes an excessive number of technologies, some of which are not explicitly mentioned in the request (e.g., Docker, Kubernetes, Terraform, Ansible).\n3. The posting is longer than necessary, with unnecessary repetition and redundancy.\n\nIn contrast, CANDIDATE A meets all criteria more effectively, making it the better choice.\n\nVERDICT: A",
+    "error": null
+   },
+   "consistency": "consistent",
+   "new_judge_winner": "dpo-b03",
+   "gemma_winner": "dpo-b03",
+   "agreement_with_gemma": true
+  }
+ ]
+}

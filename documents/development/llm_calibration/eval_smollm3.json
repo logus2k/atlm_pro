@@ -1,0 +1,190 @@
+{
+ "summary": {
+  "model": "smollm3",
+  "role_probed": "eval_judge",
+  "n_pairs": 5,
+  "n_calls": 10,
+  "parse_fail_pairs": 0,
+  "consistent_pairs": 3,
+  "inconsistent_pairs": 2,
+  "ab_ba_consistency_rate": 0.6,
+  "mean_latency_s": 0.92,
+  "median_latency_s": 0.92,
+  "max_latency_s": 1.55,
+  "min_latency_s": 0.49,
+  "section6_budget_min_at_4w": 0.9,
+  "switch_latency_s": 0.0,
+  "uses_think_chain_calls": 0,
+  "mean_completion_tokens": 222.0,
+  "comparable_to_gemma_n": 2,
+  "agreement_with_gemma_n": 2,
+  "ood03_catches_b01_collapse": {
+   "consistent": false,
+   "winner": null,
+   "expected": "dpo-b03",
+   "catches_b01_collapse": false
+  }
+ },
+ "records": [
+  {
+   "pair": "base_vs_sft",
+   "prompt_id": "ind-01",
+   "ab": {
+    "verdict": "B",
+    "winner": "sft",
+    "latency_s": 0.75,
+    "completion_tokens": 98,
+    "prompt_tokens": 1460,
+    "raw_chars": 492,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "\nVERDICT: B\n\nCandidate B's posting is significantly more concise and adheres to the criteria outlined. It clearly and succinctly addresses all required sections, including a brief summary, required skills, responsibilities, and requirements. The posting is free of repetition, rambling, or truncation, and it uses professional and inclusive language. Candidate A's posting, on the other hand, is excessively lengthy and repetitive, failing to meet the criteria for structure and completeness.",
+    "error": null
+   },
+   "ba": {
+    "verdict": "A",
+    "winner": "sft",
+    "latency_s": 0.54,
+    "completion_tokens": 115,
+    "prompt_tokens": 1460,
+    "raw_chars": 569,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "\nVERDICT: A\n\nCandidate A's posting is the clear winner. It meets all the criteria specified in the recruiter request, including the required sections and content, and does so in a clear, concise manner. The posting is free of repetition, rambling, or truncation, and the structure is well-organized. The language is professional and inclusive, and the summary effectively communicates the role's responsibilities and requirements. Candidate B's posting, on the other hand, is excessively long and repetitive, failing to meet the criteria for structure and completeness.",
+    "error": null
+   },
+   "consistency": "consistent",
+   "new_judge_winner": "sft",
+   "gemma_winner": "sft",
+   "agreement_with_gemma": true
+  },
+  {
+   "pair": "sft_vs_dpo-b01",
+   "prompt_id": "ind-05",
+   "ab": {
+    "verdict": "B",
+    "winner": "dpo-b01",
+    "latency_s": 0.92,
+    "completion_tokens": 228,
+    "prompt_tokens": 907,
+    "raw_chars": 1205,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "\nVERDICT: B\n\nThe decision to choose Candidate B over Candidate A is based on the following criteria:\n\n1. **Faithfulness to the request**: Both postings are faithful to the request, but Candidate B's description is more detailed and comprehensive, covering additional skills and responsibilities that align closely with the request.\n\n2. **Absence of repetition, rambling, or truncation**: Both postings are well-structured and free of repetition or truncation. However, Candidate B's posting is more concise and to the point, avoiding unnecessary details.\n\n3. **Structure and completeness**: Both postings include all four required sections. Candidate B's posting, however, provides more substantive content in each section, making it more complete.\n\n4. **Professional and inclusive language**: Both postings use clear, neutral language. Candidate B's posting is slightly more professional and inclusive, avoiding any biased or discriminatory phrasing.\n\nWhile Candidate A's posting is shorter and more concise, Candidate B's posting is more detailed and comprehensive, covering additional skills and responsibilities that align closely with the request. Therefore, Candidate B is the better overall choice.",
+    "error": null
+   },
+   "ba": {
+    "verdict": "B",
+    "winner": "sft",
+    "latency_s": 1.55,
+    "completion_tokens": 403,
+    "prompt_tokens": 907,
+    "raw_chars": 2064,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "\nVERDICT: B\n\n### Analysis:\n\n**Candidate A**:\n- **Summary**: The summary is clear and concise, focusing on the role's responsibilities and the tools used.\n- **Required Skills**: The list is comprehensive, covering SQL, dbt, and Looker, but lacks specific details about the tools and their applications.\n- **Responsibilities**: The responsibilities are well-defined, covering data dashboard building, SQL queries, and Looker integration.\n- **Requirements**: The requirements are detailed, including specific skills and experience, but some points are repetitive and lack clarity.\n\n**Candidate B**:\n- **Summary**: The summary is clear and highlights the role's focus on actionable insights and collaboration with product teams.\n- **Required Skills**: The list is concise and focused on the essential skills, with a clear emphasis on SQL, dbt, and Looker, and includes specific tools like d3.js and Looker Dashboard Builder.\n- **Responsibilities**: The responsibilities are well-defined, covering data dashboard building, SQL queries, and Looker integration, with a strong emphasis on collaboration and data-driven solutions.\n- **Requirements**: The requirements are clear and specific, with a focus on experience, skills, and the ability to work independently and effectively in a remote environment.\n\n**Key Differences**:\n- **Candidate B** has a more focused and concise summary, responsibilities, and requirements, with a clear emphasis on collaboration and data-driven solutions.\n- **Candidate A** has a more detailed and comprehensive list of skills, but some points are repetitive and lack clarity.\n- **Candidate B** has a stronger focus on the tools and their applications, and a clearer understanding of the role's responsibilities and requirements.\n\n**Conclusion**:\nCandidate B is the better choice overall, as it provides a clearer and more concise overview of the role, with a stronger focus on the essential skills and responsibilities. The requirements are also more specific and clear, making it easier to assess the candidate's suitability for the role.",
+    "error": null
+   },
+   "consistency": "inconsistent",
+   "new_judge_winner": null,
+   "gemma_winner": "dpo-b01",
+   "agreement_with_gemma": null
+  },
+  {
+   "pair": "dpo-b01_vs_dpo-b03",
+   "prompt_id": "ind-10",
+   "ab": {
+    "verdict": "A",
+    "winner": "dpo-b01",
+    "latency_s": 0.49,
+    "completion_tokens": 114,
+    "prompt_tokens": 928,
+    "raw_chars": 635,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "\nVERDICT: A\n\nCandidate A's posting is more faithful to the recruiter's request, as it explicitly mentions leading application security, threat modeling, and code review across multiple product teams. It also includes all required sections with substantive content, and the language is professional and inclusive. Candidate B's posting, while also meeting the criteria, does not explicitly mention leading application security and threat modeling, which are key aspects of the recruiter's request. Additionally, Candidate A's responsibilities and requirements are more detailed and comprehensive, making it a stronger candidate overall.",
+    "error": null
+   },
+   "ba": {
+    "verdict": "B",
+    "winner": "dpo-b01",
+    "latency_s": 0.53,
+    "completion_tokens": 128,
+    "prompt_tokens": 928,
+    "raw_chars": 716,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "\nVERDICT: B\n\nCandidate B's posting is more faithful to the recruiter request, as it explicitly mentions leading application security, threat modeling, and code review across multiple product teams. The responsibilities and requirements also align more closely with the request, emphasizing collaboration with security and compliance teams and the integration of security throughout the product lifecycle. Additionally, Candidate B's posting includes more detailed and relevant skills, such as knowledge of security frameworks and tools, which are important for the role. Candidate A's posting, while comprehensive, includes some skills that are not as directly relevant to the role as those in Candidate B's posting.",
+    "error": null
+   },
+   "consistency": "consistent",
+   "new_judge_winner": "dpo-b01",
+   "gemma_winner": "dpo-b01",
+   "agreement_with_gemma": true
+  },
+  {
+   "pair": "dpo-b01_vs_dpo-b02",
+   "prompt_id": "ind-09",
+   "ab": {
+    "verdict": "A",
+    "winner": "dpo-b01",
+    "latency_s": 1.04,
+    "completion_tokens": 270,
+    "prompt_tokens": 873,
+    "raw_chars": 1387,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "\nVERDICT: A\n\nThe decision is in favor of Candidate A. Here's why:\n\n1. **Faithfulness to the request**: Both postings are faithful to the request, but Candidate A's posting is more detailed and comprehensive, covering all required sections with substantive content. Candidate B's posting is shorter and lacks some of the specific details mentioned in the request, such as the need for experience with embedded hardware platforms and the importance of low-power, low-latency systems.\n\n2. **Absence of repetition, rambling, or truncation**: Both postings are well-structured and free of repetition or rambling. However, Candidate A's posting is more concise and to the point, avoiding unnecessary filler content.\n\n3. **Structure and completeness**: Both postings include all four required sections, but Candidate A's posting is more complete and detailed. Candidate B's posting is missing some of the specific requirements mentioned in the request, such as the need for experience with embedded hardware platforms.\n\n4. **Professional and inclusive language**: Both postings use clear, neutral language. However, Candidate A's posting is more professional and inclusive, avoiding any biased or discriminatory phrasing.\n\nIn conclusion, Candidate A's posting is the better choice overall, as it is more faithful to the request, more comprehensive, and uses professional and inclusive language.",
+    "error": null
+   },
+   "ba": {
+    "verdict": "B",
+    "winner": "dpo-b01",
+    "latency_s": 0.86,
+    "completion_tokens": 222,
+    "prompt_tokens": 873,
+    "raw_chars": 1147,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "\nVERDICT: B\n\nThe decision to choose candidate B over candidate A is based on the following criteria:\n\n1. **Faithfulness to the request**: Both postings are faithful to the request, but candidate B includes additional relevant skills and requirements that are not explicitly mentioned in the request. This makes candidate B more comprehensive.\n\n2. **Absence of repetition, rambling, or truncation**: Both postings are well-structured and free of repetition or truncation. However, candidate B's additional requirements and skills make it more detailed and thorough.\n\n3. **Structure and completeness**: Both postings include all four required sections. Candidate B, however, has more detailed content in each section, making it more complete.\n\n4. **Professional and inclusive language**: Both postings use clear, neutral language. Candidate B's additional requirements and skills do not introduce any biased or discriminatory phrasing.\n\nWhile candidate A is a strong candidate, candidate B's inclusion of additional relevant skills and requirements makes it a more complete and thorough candidate for the role. Therefore, the verdict is:\n\nVERDICT: B",
+    "error": null
+   },
+   "consistency": "consistent",
+   "new_judge_winner": "dpo-b01",
+   "gemma_winner": null,
+   "agreement_with_gemma": null
+  },
+  {
+   "pair": "dpo-b01_vs_dpo-b03",
+   "prompt_id": "ood-03",
+   "ab": {
+    "verdict": "B",
+    "winner": "dpo-b03",
+    "latency_s": 1.18,
+    "completion_tokens": 299,
+    "prompt_tokens": 1339,
+    "raw_chars": 1514,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "\nVERDICT: B\n\nThe candidate B posting is significantly better than candidate A. Here's why:\n\n1. **Faithfulness to the request**: Candidate B's posting directly addresses the role, technology stack (Elixir and Phoenix), and essential experience (OTP), aligning closely with the recruiter's request. Candidate A's posting, however, includes an excessive and repetitive list of unrelated skills, which does not align with the request.\n\n2. **Structure and completeness**: Candidate B's posting includes all four required sections ('## Summary', '## Required Skills', '## Responsibilities', '## Requirements') with substantive content. Candidate A's posting, while longer, is filled with repetitive and redundant information, failing to meet the criteria for completeness.\n\n3. **Professional and inclusive language**: Candidate B's posting uses clear, neutral language, free of biased or discriminatory phrasing. Candidate A's posting, while not explicitly biased, is overly verbose and lacks the clarity and conciseness of candidate B's posting.\n\n4. **Structure and completeness**: Candidate B's posting is well-structured and comprehensive, covering all necessary aspects of the role. Candidate A's posting, despite its length, is marred by repetition and redundancy, making it less effective.\n\nIn conclusion, candidate B's posting is superior to candidate A's in terms of faithfulness to the request, structure and completeness, professional language, and overall effectiveness. Therefore, the verdict is:\n\nVERDICT: B",
+    "error": null
+   },
+   "ba": {
+    "verdict": "B",
+    "winner": "dpo-b01",
+    "latency_s": 1.35,
+    "completion_tokens": 342,
+    "prompt_tokens": 1339,
+    "raw_chars": 1776,
+    "think_chars": 0,
+    "has_think": false,
+    "raw": "\nVERDICT: B\n\nThe decision to choose Candidate B over Candidate A is based on the following criteria:\n\n1. **Faithfulness to the request**: Both postings are faithful to the request, but Candidate B's summary and responsibilities are more closely aligned with the request's emphasis on real-time messaging and performance/scalability. Candidate A's summary mentions \"building and maintaining a real-time messaging platform,\" which is a good match, but Candidate B's summary is more specific and directly addresses the request's focus on performance and scalability.\n\n2. **Absence of repetition, rambling, or truncation**: Candidate B's posting is longer, but it does not contain repetition, rambling, or truncation. The repetition in Candidate B's posting is not a problem as it is not filler or redundant content. The repetition is actually a list of container orchestration tools, which is a specific and relevant skill for the role.\n\n3. **Structure and completeness**: Both postings include all four required sections. However, Candidate B's posting is more comprehensive and includes additional relevant skills and technologies, such as container orchestration using Kubernetes and Terraform, which are important for building and maintaining a scalable real-time messaging platform.\n\n4. **Professional and inclusive language**: Both postings use clear, neutral, and professional language. However, Candidate B's posting is more concise and to the point, which is a strength in professional postings.\n\nIn conclusion, while Candidate A is a strong candidate, Candidate B's posting is more aligned with the request's emphasis on real-time messaging and performance/scalability, and it includes additional relevant skills and technologies. Therefore, the verdict is:\n\nVERDICT: B",
+    "error": null
+   },
+   "consistency": "inconsistent",
+   "new_judge_winner": null,
+   "gemma_winner": "dpo-b03",
+   "agreement_with_gemma": null
+  }
+ ]
+}

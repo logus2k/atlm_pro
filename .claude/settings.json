@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat /home/logus/env/assets/agent_server/data/prompts/atlm_teacher_system_prompt.txt | head -40)",
+      "Read(//home/logus/env/assets/agent_server/data/prompts/**)",
+      "Read(//home/logus/env/assets/agent_server/documents/**)",
+      "Bash(ls -la /tmp/test_rlaif_judge.py /tmp/test_eval_judge.py /tmp/compare_judges.py 2>&1)",
+      "Read(//tmp/**)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
+    ]
+  }
+}
