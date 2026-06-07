@@ -5,7 +5,8 @@
       "Read(//home/logus/env/assets/agent_server/data/prompts/**)",
       "Read(//home/logus/env/assets/agent_server/documents/**)",
       "Bash(ls -la /tmp/test_rlaif_judge.py /tmp/test_eval_judge.py /tmp/compare_judges.py 2>&1)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(pdfinfo \"src/ma2/delivery/main \\(27\\).pdf\")"
     ],
     "additionalDirectories": [
       "/tmp"
