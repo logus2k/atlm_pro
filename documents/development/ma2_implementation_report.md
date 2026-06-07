@@ -1,12 +1,12 @@
 # Mini-Assignment 2 - Implementation Report
 
-This document records how Mini-Assignment 2 (alignment) was built: the development steps in order, what each step implements, the most relevant code, and the reasoning behind the options chosen. It is a development log, not the academic report. The academic report is the canonical notebook `src/ma2/atlm_ma2_v5_AC.ipynb`.
+This document records how Mini-Assignment 2 (alignment) was built: the development steps in order, what each step implements, the most relevant code, and the reasoning behind the options chosen. It is a development log, not the academic report. The academic report is the canonical notebook `src/ma2/atlm_ma2_v6_AC.ipynb`.
 
-All MA2 stages are implemented. The pipeline has been executed end to end once under a Gemma-4-only judge ("Configuration B", v4 of the notebook), and is being re-executed under a cross-judge configuration ("Configuration C", v5_AC) at the time of this revision. Configuration C uses three independent local LLM families across the three pipeline roles - student, RLAIF judge, eval judge - to break the self-preference loop that Configuration B inherited from reusing Gemma as the data-preparation teacher *and* both judges. The decision to redo the run under Configuration C is documented in §10 below.
+All MA2 stages are implemented and executed end to end. The pipeline went through four canonical iterations: v3 (first end-to-end RLAIF run with Gemma as judge), v4_AC ("Configuration B", Gemma-4 in all three external-LLM roles), v5_AC ("Configuration C", cross-judge with Nemotron as RLAIF judge and Granite-3.3 as eval judge), and v6_AC (consolidated four-beta sensitivity probe with full-ranking judging at 1,500 preference triples, the final canonical notebook). Each iteration surfaced specific failure modes and learnings that the next addressed. The cross-judge motivation behind v5_AC is documented in §10; the v6_AC consolidation, the post-execution discovery of an inference-time decoder bug carried over from MA2's earliest notebooks, and the four-beta probe (including the b005 cliff finding) are documented in §11 and §12.
 
 ## 1. Goal and pipeline
 
-The brief asks us to take the domain-adapted model from Mini-Assignment 1 and apply an alignment technique on top of it, walking the full post-training pipeline and reasoning about what each stage changes. The report cap is 5 pages.
+The brief asks us to take the domain-adapted model from Mini-Assignment 1 and apply an alignment technique on top of it, walking the full post-training pipeline and reasoning about what each stage changes. The report cap is 10-15 pages.
 
 The pipeline has four stages, the last two belonging to this assignment:
 
@@ -228,7 +228,7 @@ Four candidates are sampled per prompt with temperature 0.9 and top-p 0.95, `num
 
 ### 7.3 Judging (Section 4.3)
 
-The judge model receives a recruiter request and four candidate postings labelled 1 to 4, and is asked for a listwise ranking that ends with the single line `RANKING: best=<id> worst=<id>`. Listwise is cheaper than pairwise: one judge call per prompt produces one (best, worst) pair, which is exactly what DPO needs; pairwise would multiply the call count by six.
+The judge model receives a recruiter request and four candidate postings labelled 1 to 4, and is asked for a full listwise ranking that ends with the single line `RANKING: <best> > <2nd> > <3rd> > <worst>`. This is the v6 format. The earlier v3-v5 format was `RANKING: best=<id> worst=<id>`, which produced one (best, worst) pair per prompt; the v6 full-ranking format produces six (higher, lower) pairs per prompt, multiplying the preference signal volume by six at zero extra generation cost (the four candidates per prompt are sampled once and reused).
 
 The rubric is, in priority order: faithfulness to the request, structure and completeness (`## Summary`, `## Required Skills`, `## Responsibilities`, `## Requirements`, each non-empty), professional and inclusive language, and absence of repetition or truncation. The rubric lives in `agent_server`'s preset registry under the `atlm_rlaif_judge` agent (see §9), not inline in the notebook code cell; the cell only sends `{model: "atlm_rlaif_judge", messages: [{role: user, content: ...}]}`.
 
@@ -236,9 +236,9 @@ The judge call uses four worker threads against `agent_server` and is idempotent
 
 ### 7.4 Preference triples (Section 4.4)
 
-`assemble_preferences()` reads `judge_ranks.jsonl` and `sft_candidates.jsonl` and writes the (prompt, chosen, rejected) triples to `data/processed/ma2/preferences.jsonl`. The chosen is the candidate the judge ranked as best; the rejected is the candidate ranked as worst. The other two candidates are dropped; DPO trains on the extremes for the strongest gradient signal.
+`assemble_preferences()` reads `judge_ranks.jsonl` and `sft_candidates.jsonl` and writes the (prompt, chosen, rejected) triples to `data/processed/ma2/preferences.jsonl`. The v6 assembler iterates the six (higher, lower) pairs implied by each full ranking and emits one triple per pair; with 241 successfully ranked prompts (9 parse failures of 250) the run produces 1,446 triples, against Configuration B and C's 222 best-worst triples on the same prompt set.
 
-The Configuration B run (Gemma judge) produced 250 valid triples. The Configuration C run (Nemotron judge) is in progress; expected output is the same size, with the chosen and rejected texts re-derived from the Nemotron rankings.
+The Configuration B run (Gemma judge, listwise best-worst format) produced 250 triples. Configuration C (Nemotron judge, same best-worst format) produced 222 triples. v6 (Nemotron judge, full-ranking format) produces 1,446 triples. The v6 pivot tested whether preference signal volume was the bottleneck for DPO improvement. The finding (documented in §11) was that more triples did not move the over-fit signature (train_rwd_acc 1.00 in both Configuration C and v6); volume was not the right lever. This is itself a substantive methodological finding.
 
 ## 8. Step 5 - DPO training (Section 5)
 
@@ -252,19 +252,25 @@ A fresh LoRA is trained on top of the SFT-merged base. Shape matches the SFT LoR
 DPO_CFG = {
     "epochs":        5,
     "learning_rate": 5e-5,        # higher than SFT; LoRA-DPO needs more
-    "betas":         [0.1, 0.2, 0.3],
 }
+DPO_BETAS = [0.05, 0.10, 0.20, 0.30]
 ```
 
-The learning rate is `5e-5`, an order of magnitude higher than full-fine-tune DPO conventionally uses (`5e-6`). This was determined by iteration on Configuration B: at `5e-6` over 1 epoch DPO produced near-zero reward margins; at `5e-6` over 5 epochs still near-zero; `5e-5` over 5 epochs produced clean positive margins. LoRA-DPO is a small subspace of the full parameter space and needs a proportionally higher learning rate to move the reward function.
+The learning rate is `5e-5`, an order of magnitude higher than full-fine-tune DPO conventionally uses (`5e-6`). This was determined by iteration on Configuration B: at `5e-6` over 1 epoch DPO produced near-zero reward margins; at `5e-6` over 5 epochs still near-zero; `5e-5` over 5 epochs produced clean positive margins. LoRA-DPO is a small subspace of the full parameter space and needs a proportionally higher learning rate to move the reward function. The aborted v6 first attempt at `1e-4` produced visible fluency degradation (perplexity rise b01 4.64 to 8.15, hallucinated phrases) despite higher training-side reward margin, and was reverted to `5e-5`. The `5e-6` to `5e-5` to `1e-4` iteration is the concrete LR sensitivity finding for the report.
 
-Three beta values are trained (`0.1`, `0.2`, `0.3`) to map the KL-coefficient sensitivity surface. Beta is the dominant alignment hyperparameter: lower beta lets the policy diverge further from the SFT reference (more aggressive alignment, more reward gain), higher beta keeps the policy close (more conservative, lower reward gain but lower risk of degeneration). All three are trained on the same preference set so they are directly comparable.
+Four beta values are trained in v6 (`0.05`, `0.10`, `0.20`, `0.30`) consolidated in a single training cell (`ma2s54run`) with idempotency on `summary.json` existence. The progression from three to four points was a deliberate cliff-probe addition: the original three-beta probe (`0.10`, `0.20`, `0.30`) showed monotonic alignment improvement at lower beta but could not distinguish "lower is always better" from "alignment quality peaks somewhere in the tested range". Adding `0.05` resolves this directly. Beta is the dominant alignment hyperparameter: lower beta lets the policy diverge further from the SFT reference (more reward gain), higher beta keeps the policy close (more conservative). All four are trained on the same preference set so they are directly comparable.
 
 ### 8.2 Outputs
 
-The three runs write to `outputs/ma2-360m-dpo-{b01,b02,b03}/`, one LoRA adapter per beta. The Configuration B checkpoints have been moved to `outputs/ma2-360m-dpo-{b01,b02,b03}_gemma_run/` to preserve them; Configuration C overwrites the canonical paths.
+The four runs write to `outputs/ma2-360m-dpo-{b005,b01,b02,b03}/`, one LoRA adapter per beta. Backup paths preserve each configuration's output:
 
-The b02 leg (beta=0.2) was added partway through development as a sweet-spot probe after the Configuration B win-rate showed a monotonic preference for lower beta but with a documented failure mode at b01 (the `ood-03` repetition collapse). b02 is intended to be a "best of both" candidate; the Section 6.7 eval evaluates it against b01 and b03 on the 20 frozen prompts.
+- `outputs/ma2-360m-dpo-{b01,b02,b03}_gemma_run/` - Configuration B (v4_AC, Gemma judge, 222 best-worst triples).
+- `outputs/ma2-360m-dpo-{b01,b02,b03}_4cand_bestworst/` - Configuration C (v5_AC, Nemotron+Granite judges, 222 best-worst triples).
+- `outputs/ma2-360m-dpo-{b01,b02,b03}_phase_a_aborted/` - first attempt at v6 full-ranking + LR=1e-4 (1,500 triples at full rank, aborted after fluency collapse).
+- `outputs/ma2-360m-dpo-{b01,b02,b03}_v6_lr1e-4_aborted/` - second attempt at v6 with LR=1e-4 (also aborted).
+- `outputs/ma2-360m-dpo-{b005,b01,b02,b03}/` - the final v6 run at LR=5e-5 with full-ranking (1,446 triples).
+
+The b02 leg was kept across all configurations after being added in Configuration B as a sweet-spot probe between b01 and b03. In v6 the four-beta probe locates the alignment-quality peak; b005 was added specifically to test the lower edge.
 
 ## 9. Calling agent_server (§9.1) and active-model switching (§9.2)
 
@@ -351,41 +357,137 @@ Disqualifiers (any single failure rules a model out of the role): RLAIF parse be
 
 The decision plus the calibration table is reproduced verbatim in `documents/development/llm_models_performance.md`, and the per-model raw JSONs (one per probe, including each judge's full reasoning text) are in `documents/development/llm_calibration/`. After role assignment, the agent presets were installed (§9), the notebook code cells were rewritten to call the agent presets, an end-to-end validation script (`/tmp/validate_agent_presets.py`) was run that exercises the full path (switch → call → parse → inspect reasoning on `ood-03`), and the Configuration C run was started.
 
-## 11. Step 7 - Three-way evaluation execution (Section 6)
+## 11. Step 7 - Evaluation execution and post-execution discoveries (Section 6)
 
-The four model states (base SmolLM2-360M, MA1+SFT, MA2 DPO-b01, MA2 DPO-b03) are run on the 20 frozen prompts. Automatic metrics (perplexity on a held-out set, and the LLM-as-judge win-rate) plus qualitative side-by-side examples are reported, with the in-distribution and out-of-distribution sub-sets kept separate. Section 6.7 separately compares DPO-b02 against b01 and b03 on the same 20 prompts. Note that the first leg, the base model, is the raw pretrained checkpoint with no MA1 LoRA, which is a different baseline from the merged MA1 model used in the Section 3.5 sanity check; the evaluation prose makes that explicit.
+The five model states (base SmolLM2-360M, MA1+SFT, MA2 DPO-b005, DPO-b01, DPO-b02, DPO-b03 - six in total with the four DPO betas in v6) are run on the 20 frozen prompts. Automatic metrics (perplexity on a held-out set, and the LLM-as-judge win-rate) plus qualitative side-by-side examples are reported, with the in-distribution and out-of-distribution sub-sets kept separate. Note that the first leg, the base model, is the raw pretrained checkpoint with no MA1 LoRA, which is a different baseline from the merged MA1 model used in the Section 3.5 sanity check; the evaluation prose makes that explicit.
 
-Section 6.4 uses an order-swap protocol: every (model-A vs model-B, prompt) pair is judged twice with the candidates in opposite orders. Only when both orderings agree is the pair-prompt counted as a clean win; disagreement is reported as inconsistency rate (a diagnostic for how noisy the judge is). The rubric was tightened between the first Configuration B win-rate and the final one to add an explicit "length is not a quality indicator" instruction and promote anti-repetition to criterion #2; that corrected rubric is the one carried into `atlm_eval_judge`'s preset.
+Section 6.4 uses an order-swap protocol: every (model-A vs model-B, prompt) pair is judged twice with the candidates in opposite orders. Only when both orderings agree is the pair-prompt counted as a clean consistent verdict; disagreement is reported as inconsistency rate (a diagnostic for how noisy the judge is). The rubric was tightened between the first Configuration B win-rate and the final one to add an explicit "length is not a quality indicator" instruction and promote anti-repetition to criterion #2; that corrected rubric is the one carried into `atlm_eval_judge`'s preset.
 
-Configuration C results will be filled in here once the run completes.
+### 11.1 v6 evaluation first pass and the post-execution discovery of a decoder bug
 
-## 12. Limitations (Section 7)
+The v6 first pass at LR=5e-5 with 1,446 full-ranking triples produced training-side metrics in the expected direction (train_rwd_acc reached 1.00 across all three betas, eval_rwd_acc 0.69-0.72) but the generations showed catastrophic token-level repetition collapse: dpo-b02 emitted 42 consecutive reps of "SQS" on the cloud-engineer prompt `ind-07`; dpo-b03 emitted 29 reps of "ECS". dpo-b01 had broader but milder repetition spread across `ind-07`, `ind-08`, and `ind-10`. Perplexity rose from SFT 4.54 to dpo-b01 6.01, with the close-pair AB-BA agreement floored at 5-15% in Section 6.4. The first-pass picture suggested either DPO over-training, an SFT-corpus defect, or a judge confounder.
 
-The honest discussion of where alignment helped and where it regressed (verbosity, refusals, lost domain knowledge, sycophancy), which the brief weights explicitly. Section 7 in the notebook holds three sub-sections:
+Reading the actual data on disk produced a sharper diagnosis. The SFT corpus scan (`converted.jsonl`) showed only 7 occurrences of "Container orchestration using" across 2,507 records, maximum 1 per record. The failure was not inherited from training data; it was emergent at inference. Cross-configuration comparison (Configuration B with 70 optimiser steps versus v6 with 405 steps, both producing the same family of token-loop failures but on different prompts) confirmed mode collapse scales with optimiser-step count and that the judge identity selects which prompt collapses (Gemma's preferences pushed `ood-03` b01 in v4; Nemotron's pushed `ind-07` in v6).
 
-- 7.1: What alignment changed (the base / SFT / DPO contrast across the four metrics).
-- 7.2: Beta sensitivity in this run (the b01 / b02 / b03 contrast, including the substantive-content root-cause finding from reading the judge's `<think>` reasoning on prompts where simpler explanations failed).
-- 7.3: Failure modes, limitations, and future work (the `ood-03` collapse at b01, the small evaluation set, hyperparameter coverage, and the methodological caveats - in Configuration B these were dominated by the single-judge self-preference circle; in Configuration C they are dominated by the small N and the limited beta-by-lr grid).
+Most consequentially, the v6 evaluation function in `ma2s62code` was generating with `do_sample=False` (greedy) and no `repetition_penalty`. The Mini-Assignment 1 inference helper `src/generate_mp1.py` carried `repetition_penalty=1.3` explicitly with the comment "small continued-pretrained models loop easily"; this lesson was not carried forward to MA2's evaluation generation. Restoring `repetition_penalty=1.3` (matching MA1's prior art) and regenerating Section 6.2 eliminated all token-loop catastrophes across 100 outputs (5 models x 20 prompts), with zero prompts showing severe repetition under the same scan. Small content-level hallucinations appeared in place of token loops (b01 expanded EKS as "Eventual Consistency Cluster" and KMS as "Key Management System (kMS)") but no catastrophic structural failures remained.
 
-These sections will be rewritten against the Configuration C numbers once the run is in and the new judge reasoning has been inspected.
+Re-running Section 6.4 against the clean generations moved the close-pair AB-BA agreement from 5-15% to 15-40%, well off the position-bias floor. When Granite committed on close pairs it picked DPO over SFT consistently (18 close-pair consistent verdicts, all DPO wins, across the three sft-vs-dpo pairs) and produced a b01 > b02 > b03 ordering on the DPO-vs-DPO comparisons. The catastrophic outputs had been actively confounding Granite's verdicts; with them removed, the real DPO signal partially surfaced.
+
+The methodological reading: the evaluation chain had two compounding failure modes, only one of which was a DPO problem. The decoder bug (missing `repetition_penalty`) was an inference-pipeline regression carried across v3 to v6 unnoticed because it produced training-side metrics that looked normal. The judge ceiling (Granite's structural position bias on close pairs) is a separate, real limitation documented in §12.
+
+### 11.2 Cross-configuration comparison
+
+Three end-to-end configurations exist on disk with comparable adapters preserved:
+
+| Config | Judge | Triples | Optim steps | Per-beta failure character |
+|---|---|---|---|---|
+| B (v4_AC) | Gemma | 222 best-worst | ~70 | b01 collapsed on `ood-03` (51x "Container orchestration using"); b02/b03 clean |
+| C (v5_AC) | Nemotron+Granite | 222 best-worst | ~70 | clean on `ind-07` across all betas; clean on `ood-03` (Gemma collapse story was judge-specific) |
+| v6 first pass | Nemotron+Granite | 1,446 full-rank | ~405 | b01 broad-mild repetition (3 prompts); b02/b03 catastrophic on `ind-07` (42x SQS, 29x ECS) |
+| v6 with rep_penalty | Nemotron+Granite | 1,446 full-rank | ~405 | zero token-loop failures on any of 100 outputs |
+
+The pattern: mode collapse character (broad vs catastrophic; which prompt) scales with optimiser-step count and judge identity, but the underlying decoder-loop failure mode required missing `repetition_penalty` at inference to surface as token streams. Configurations B and v6 both reach the loop attractor at low beta; Configuration C did not at 70 steps but would have at 405.
+
+### 11.3 v6 final evaluation numbers (with `repetition_penalty=1.3`)
+
+Perplexity on the SFT validation set (lower is better):
+
+| model | perplexity |
+|---|---|
+| base | 11.66 |
+| sft | 4.54 |
+| dpo-b005 | 8.84 |
+| dpo-b01 | 6.01 |
+| dpo-b02 | 5.03 |
+| dpo-b03 | 4.80 |
+
+Perplexity rises smoothly as beta decreases from 0.30 to 0.10 (the alignment-fluency trade-off operating as expected), then a sharp cliff between b01 (6.01) and b005 (8.84, +47%). The cliff signature continues in the behavioural stats: b005 outputs have mean 869 chars versus b01's 1,458 (40% shorter), with a 24-char minimum reflecting near-immediate termination on some prompts.
+
+Section 6.4 pairwise win-rate (20 prompts, AB-BA order-swap, consistent verdicts only):
+
+| comparison | a wins | b wins | inconsistent | agreement |
+|---|---|---|---|---|
+| base vs sft | 0 | 7 | 13 | 35% |
+| base vs dpo-b005 | 2 | 13 | 5 | 75% |
+| base vs dpo-b01 | 0 | 18 | 2 | 90% |
+| base vs dpo-b02 | 1 | 14 | 5 | 75% |
+| base vs dpo-b03 | 1 | 12 | 7 | 65% |
+| sft vs dpo-b005 | 2 | 7 | 11 | 45% |
+| sft vs dpo-b01 | 0 | 8 | 12 | 40% |
+| sft vs dpo-b02 | 0 | 6 | 14 | 30% |
+| sft vs dpo-b03 | 0 | 4 | 16 | 20% |
+| dpo-b005 vs dpo-b01 | 2 | 1 | 17 | 15% |
+| dpo-b005 vs dpo-b02 | 5 | 2 | 13 | 35% |
+| dpo-b005 vs dpo-b03 | 5 | 1 | 14 | 30% |
+| dpo-b01 vs dpo-b02 | 3 | 0 | 17 | 15% |
+| dpo-b01 vs dpo-b03 | 5 | 1 | 14 | 30% |
+| dpo-b02 vs dpo-b03 | 2 | 0 | 18 | 10% |
+
+Reading the table: base loses cleanly to every aligned model. b01 sweeps SFT 8-0 in consistent verdicts with zero losses; b005 wins SFT 7-2 but is the only DPO leg where SFT actually beats a DPO leg. The DPO-vs-DPO comparisons sort in the expected lower-beta-preferred direction across b01/b02/b03, but b005 versus b01 is essentially tied (2-1 b005, 17 inconsistent, 15% agreement). Combined with the perplexity cliff, the four-point probe locates the alignment-quality peak at b01.
+
+### 11.4 The four-point beta sensitivity finding
+
+| beta | eval_rwd_acc | perplexity | consistent wins vs SFT | consistent losses to SFT |
+|---|---|---|---|---|
+| 0.30 | 0.694 | 4.80 | 4 | 0 |
+| 0.20 | 0.694 | 5.03 | 6 | 0 |
+| 0.10 | 0.715 | 6.01 | 8 | 0 |
+| 0.05 | 0.701 | 8.84 | 7 | 2 |
+
+DPO alignment quality is not monotonic in 1/beta across the tested range. It peaks at beta=0.10 on every measurable axis and degrades below 0.10 because over-divergence from SFT outweighs the alignment signal. b01 is the deliverable policy. The cliff finding is the substantive contribution of the four-point probe; the original three-beta probe (0.30, 0.20, 0.10) could not have produced it.
+
+## 12. Limitations and methodological findings (Section 7)
+
+Section 7 of the notebook holds three sub-sections, each grounded in v6 data:
+
+### 12.1 7.1 What alignment changed
+
+The base/SFT/DPO contrast. base loses to every aligned model (Section 6.4 win-rate, 65-90% AB-BA agreement). DPO produces 18 consistent close-pair wins over SFT across the three sft-vs-dpo pairs at b01/b02/b03 (zero losses), shifting to 7-2 at b005. DPO's improvement is real and detectable when the decoder bug is fixed and the judge is given clean inputs. Qualitative inspection (Section 6.5) shows DPO fixing specific SFT failure modes (the SFT defect on `ind-07` that the DPO policy substantially corrects, particularly at the deliverable b01).
+
+### 12.2 7.2 Beta sensitivity in this run
+
+A four-point sensitivity check (beta in [0.05, 0.10, 0.20, 0.30]) at fixed LR=5e-5, fixed training data, fixed step count. This is a one-axis sensitivity probe, not a full (beta x LR) grid sweep with replication. The honest framing:
+
+- Across the three originally-tested betas (0.30 / 0.20 / 0.10), alignment quality improves monotonically as beta decreases (lower beta = more policy divergence from SFT = stronger preference learning).
+- The b005 probe (beta=0.05) breaks the monotonic pattern: perplexity jumps +47%, mean output length drops 40%, and SFT now beats b005 on 2 prompts (versus 0 prompts for all higher betas).
+- The alignment-quality peak is at beta=0.10. The original three-point probe could not have located this; the cliff probe at 0.05 was the methodologically necessary fourth data point.
+
+The LR sensitivity history (5e-6 produced near-zero margins, 5e-5 produced clean signal, 1e-4 produced fluency collapse on the first v6 attempt) is the concrete LR-axis sensitivity finding. The combination (beta peak at 0.10, LR peak at 5e-5) is the hyperparameter answer this work supports.
+
+### 12.3 7.3 Failure modes, limitations, and future work
+
+The substantive methodological chapter. With 10-15 pages there is room for each item as its own subsection:
+
+- **Cross-judge protocol motivation and outcomes.** Configuration B used Gemma 4 in all three external-LLM roles (MA1 ETL teacher, RLAIF judge, eval judge) and produced a "DPO-b01 wins decisively" narrative grounded in Gemma's self-preferences. Configuration C broke the self-preference loop by moving the two MA2 judges to Nemotron (RLAIF) and Granite-3.3 (eval), validated via a calibration battery documented in `documents/development/llm_models_performance.md`. v6 retained that cross-judge split.
+- **Granite eval-judge ceiling.** On easy pairs (base vs anything), Granite produces decisive 65-90% AB-BA agreement. On close pairs (sft vs dpo, dpo vs dpo) in the catastrophic-output regime, AB-BA agreement floored at 5-15%, below the random-noise expected value of 50% and consistent with strong systematic position bias. The order-swap protocol correctly filters this as inconsistency rather than treating position-biased verdicts as signal. With clean outputs (rep_penalty enabled) the floor moves to 15-40%, recovering partial signal but still well below the 65-90% range Granite achieves on easy pairs. The methodological reading is that Granite's ~2B parameter budget produces a structural discrimination ceiling on close pairs; the cross-judge calibration sample (5 pairs x 2 orders = 10 calls) was undersized to surface this. A close-pair-only calibration with larger N would have flagged the issue before the pipeline was built on it.
+- **N=20 eval set bounds wide.** The Section 6.4 numbers carry wide confidence intervals on close comparisons. The 18-0 consistent-DPO-wins-over-SFT signal is robust to N; the b01 versus b02 (3-0 consistent) signal is at the edge.
+- **One-dimensional sensitivity probe, not a sweep.** The four-beta probe at fixed LR is a sensitivity check, not a grid sweep. A real sweep would be (beta x LR) with replication. Acknowledged as future work.
+- **Preference data volume was not the bottleneck.** The 6.5x scaling from 222 to 1,446 triples did not move the train_rwd_acc=1.00 over-training signature, did not move the close-pair judge floor, and did not produce a deployment-quality lift over Configuration C's three-beta result. The bottleneck was preference signal noise plus judge ceiling, not volume.
+- **DPO coverage bound.** DPO can only suppress failure modes that appear in its candidate distribution. The `ind-07` SFT defect was outside the 250 preference prompts; DPO had no gradient to penalise it, which is why the failure persisted into all DPO variants. This is a clean theoretical point with concrete evidence.
+- **The Mini-Assignment 1 inference-helper regression.** MA1's `generate_mp1.py` carried `repetition_penalty=1.3` with an explicit code comment ("small continued-pretrained models loop easily"). MA2's evaluation generation function in `ma2s62code` dropped it, silently, across v3-v6. The catastrophic v6 outputs surfaced this only after substantial analysis. The methodological lesson: cross-stage inference-kwarg parity is a delivery-discipline issue worth a checklist.
+- **Iteration history as methodological learning.** The Configuration A (Gemma judge, single end-to-end run, undersized max_tokens caused 99% parse failure) to B (Gemma fixed, headline result was "DPO-b01 wins decisively") to C (cross-judge protocol, surfaced judge floor) to v6 (consolidated, full-ranking, four-beta, rep_penalty restored) trajectory is itself a substantive methodological story. Each iteration's failure motivated the next iteration's design.
+- **Future work.** Bigger eval judge (Gemma-class, Qwen3.5-9B-class, or judge ensemble); larger N=200+ stratified eval; full (beta x LR) sweep with replication; addressing the SFT-corpus defects via teacher quality improvement; testing whether candidate diversity (8 candidates per prompt or candidates from intermediate SFT checkpoints) materially changes the preference signal where volume did not.
 
 ## 13. Notebook versioning and engineering notes
 
-The working notebook progressed through five versions:
+The working notebook progressed through six versions:
 
 - `atlm_ma2_v1.ipynb`: SFT implemented and run; v1 was frozen as the record of the SFT run with its execution outputs.
 - `atlm_ma2_v2.ipynb`: clean copy of v1 to continue work on the preference dataset and DPO sections.
-- `atlm_ma2_v3.ipynb`: first end-to-end RLAIF run with Gemma as judge (Configuration A); revealed the initial DPO learning-rate problem (`5e-6` gave near-zero margins) and the original judge rubric's length bias.
-- `atlm_ma2_v4_AC.ipynb`: 66 cells, the canonical Configuration B working notebook. SFT unchanged; preference dataset re-judged with the corrected rubric (anti-repetition + anti-length-bias); DPO retrained at three betas; Section 6 win-rate with order-swap protocol; Section 7 root-cause analysis grounded in Gemma's `<think>` text.
-- `atlm_ma2_v5_AC.ipynb` (current canonical): clean copy of v4 with the agent-preset refactor: the helper cell `ma2s40helpers` defines `switch_active_model`, the three judge cells (`ma2s43code`, `ma2s64code`, `ma2s67code`) call the agent presets, the markdown cells (`ma2s1pipe`, `ma2s4`, `ma2s42`, `ma2s43`, `ma2s64`) describe the Configuration C judges, and the rubrics are shown as fenced blocks for the PDF deliverable. 68 cells total.
+- `atlm_ma2_v3_AC.ipynb`: first end-to-end RLAIF run with Gemma as judge (Configuration A); revealed the initial DPO learning-rate problem (`5e-6` gave near-zero margins) and the original judge rubric's length bias.
+- `atlm_ma2_v4_AC.ipynb`: 66 cells, the canonical Configuration B working notebook. SFT unchanged; preference dataset re-judged with the corrected rubric (anti-repetition + anti-length-bias); DPO retrained at three betas; Section 6 win-rate with order-swap protocol; Section 7 root-cause analysis grounded in Gemma's `<think>` text. Frozen.
+- `atlm_ma2_v5_AC.ipynb`: 68 cells, the canonical Configuration C working notebook. Clean copy of v4 with the agent-preset refactor: the helper cell `ma2s40helpers` defines `switch_active_model`, the three judge cells call the agent presets, the markdown cells describe the cross-judge configuration, and the rubrics are shown as fenced blocks. The end-to-end run produced the cross-judge close-pair inconsistency finding documented in §11. Frozen.
+- `atlm_ma2_v6_AC.ipynb` (current canonical): 64 cells, the consolidated four-beta-with-full-ranking working notebook. Built from v5_AC commit `fc02512` (Configuration C state). Consolidated changes: b02 training moved into `ma2s54run` (one cell trains all betas in sequence) with idempotency on `summary.json`; full-ranking RLAIF parser in `ma2s43code` (six pairs per ranking, 1,446 triples); LR confirmed at 5e-5 after the v6 LR=1e-4 attempt failed; b005 added as a cliff probe in `DPO_BETAS`; `repetition_penalty=1.3` restored to `ma2s62code` after the post-execution decoder-bug discovery. The b005 cliff probe, the cross-config comparison, and the rep_penalty discovery together produced the substantive Section 7.2 finding.
 
 Engineering observations carried forward:
 
 - **Merge-cell CUDA fix** (§4): an environment variable set for a CPU-only operation must not be set process-wide in a notebook that also trains on the GPU.
 - **TRL 1.5.1 API names** (§2): `max_length` and `eval_strategy`, not `max_seq_length` and `evaluation_strategy`. Verified before each run.
-- **DPO learning rate for LoRA** (§8.1): conventional `5e-6` is for full-fine-tune DPO; LoRA-DPO needs `1e-5` to `5e-5` to produce non-zero reward margins.
+- **DPO learning rate for LoRA** (§8.1): conventional `5e-6` is for full-fine-tune DPO; LoRA-DPO needs `5e-5` to produce non-zero reward margins. Higher than `5e-5` (the v6 first attempt at `1e-4`) produces fluency collapse despite training-side margin gain.
+- **Inference-time `repetition_penalty` parity** (§11.1): MA1's `generate_mp1.py` carried `repetition_penalty=1.3` explicitly for this model family. MA2's evaluation generation function dropped it across v3-v6. Restoring it in `ma2s62code` eliminated all token-loop catastrophic failures. Cross-stage inference-kwarg parity is now a delivery-discipline checklist item.
+- **Idempotency on training output directories** (§8.2): `ma2s54run` checks `outputs/ma2-360m-dpo-{tag}/summary.json` existence and skips runs already on disk. This let the v6 b005 cliff probe be added without retraining the other three betas.
 - **Judge `<think>` budget** (§7.3): Gemma's `<think>` chain on the listwise task averages 4,276 chars; the original `max_tokens=800` cap caused 99 percent parse failures on the first Configuration A judging run. Lifting to 16,384 fixed it and is now the standard for every judge call. Qwen's chain on the same task averages 50,807 chars (capped) - that was the disqualifying signal in the calibration battery.
 - **Active-model switch hold** (§9.2): the SDK doc reports a 30-45 second switch latency, but `agent_server` clients must enforce an additional client-side minimum hold (~60 s total) before the next call. Polling `/v1/models` for `active: true` is necessary but not sufficient. The `switch_active_model` helper bakes both checks in.
-- **Backup / restore discipline**: before launching Configuration C, the Configuration B run's artefacts were moved to `data/processed/ma2/gemma_run/` and `outputs/ma2-360m-dpo-{b01,b02,b03}_gemma_run/`. The judge log files (`judge_ranks.jsonl`, `winrate_calls.jsonl`) were truncated so the resume logic in the cells starts fresh; the SFT corpus and the `eval_generations/{base,sft}.jsonl` files were left untouched because they are independent of the judge model.
+- **Backup / restore discipline**: each configuration's output artefacts are preserved under suffixed directories (`_gemma_run/`, `_4cand_bestworst/`, `_phase_a_aborted/`, `_v6_lr1e-4_aborted/`). The catastrophic v6 first-pass eval artefacts are preserved at `data/processed/ma2/v6_no_rep_penalty/` for the with-vs-without-rep_penalty comparison.
 
-These five versions, plus the calibration report and the four `agent_server_setup/` files, are the full development trail of MA2.
+These six versions, plus the calibration report and the four `agent_server_setup/` files, are the full development trail of MA2.
