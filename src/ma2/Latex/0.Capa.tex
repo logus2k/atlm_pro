@@ -1,0 +1,54 @@
+\documentclass[../main.tex]{subfiles}
+
+\begin{document}
+
+\newgeometry{margin=0cm}
+\thispagestyle{empty}
+
+\begin{titlepage}
+\begin{tikzpicture}[remember picture,overlay]
+
+% Fundo branco
+\fill[white] (current page.south west) rectangle (current page.north east);
+
+% Logotipo ISCTE
+\node[anchor=north west] at ([xshift=1.8cm,yshift=-1.45cm]current page.north west)
+  {\includegraphics[width=5cm]{Figures/iscte.png}};
+
+% Bloco ATLM
+\fill[atlmdark] ([xshift=-4cm,yshift=-0.05cm]current page.north east)
+  rectangle ++(1.55cm,-1.75cm);
+
+\node[text=white,font=\bfseries\scriptsize] 
+  at ([xshift=-3.25cm,yshift=-1.36cm]current page.north east) {ATLM};
+
+% Imagem principal
+\node[anchor=north] at ([yshift=-3.05cm]current page.north)
+  {\includegraphics[width=18cm]{Figures/cover.png}};
+
+% Título
+\node[anchor=north,text=iscteblue,font=\bfseries\Large] 
+  at ([yshift=-23.90cm]current page.north)
+  {\huge Advanced Techniques for Language Models};
+
+% Mini-assignment
+\node[
+    anchor=north,
+    text=redmini,
+    font=\bfseries\normalsize
+] at ([yshift=-25.05cm]current page.north)
+  {\Large Mini-Assignment 2};
+
+% Autores
+\node[
+    anchor=south,
+    font=\large
+] at ([yshift=1cm]current page.south)
+  {\normalsize António Cruz (140129), Bruno Santos (140586), Pedro Miranda (129268)};
+
+\end{tikzpicture}
+\end{titlepage}
+
+\restoregeometry
+
+\end{document}

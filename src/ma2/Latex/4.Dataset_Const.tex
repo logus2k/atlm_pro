@@ -1,0 +1,69 @@
+\documentclass[../main.tex]{subfiles}
+
+\begin{document}
+
+
+
+\section{Preference Dataset Construction}
+\label{sec:preference_dataset}
+
+Direct Preference Optimisation requires a dataset of (prompt, chosen, rejected) triples. Rather than use a generic preference dataset or annotate by hand, the project builds its own through Reinforcement Learning from AI Feedback (RLAIF) \cite{bai2022constitutional}: candidates are sampled from the SFT model and ranked by a separate, stronger LLM. Three design decisions (prompt source, candidate sampling, and judge selection) are detailed below.
+
+\subsection{Preference Prompts}
+\label{sec:pref_prompts}
+
+The 250 preference prompts come from the SFT validation hold-out introduced in Section~\ref{sec:sft_data}: one query per record, drawn with a separate seed so the pick does not correlate with the record shuffle. This choice satisfies two constraints simultaneously. The SFT model has never trained on these prompts, so the sampled candidates reflect generalisation rather than memorisation. The 250 records are also kept strictly separate from the 20 frozen evaluation prompts used in Section~\ref{sec:evaluation}, which are hand-written and cannot appear in \texttt{converted.jsonl} by construction.
+
+\subsection{Candidate Sampling}
+\label{sec:candidate_sampling}
+
+Four candidates are sampled from the SFT model per prompt using temperature 0.9 and nucleus sampling ($p = 0.95$), with \texttt{num\_return\_sequences=4} in a single batched \texttt{generate} call and a maximum of 500 new tokens. Stochastic decoding is required: greedy decoding would produce near-identical samples across the four slots, leaving the judge nothing to rank. The four-candidate budget was chosen as the smallest set that gives a full-ranking judge six distinct ordered pairs per prompt (see Section~\ref{sec:rlaif_judging}).
+
+\subsection{Cross-Judge Calibration}
+\label{sec:calibration}
+
+Choosing the judge model required evidence rather than a guess. A calibration battery probed all five non-Gemma chat models available on \texttt{agent\_server}: Nemotron~Nano~4B, Granite~3.3~2B, Qwen3.5, Ministral, and SmolLM3; plus Gemma~4~E2B as a control, on small fixed samples of the actual MA2 judging tasks: 5 listwise RLAIF prompts and 5 pairwise evaluation pairs (each pair judged in both AB and BA order, 10 calls per model on the eval task). Gemma was excluded from the two MA2 judge roles regardless of its calibration score, because it also served as the ETL teacher that generated the SFT corpus; reusing it as judge would introduce shared-prior contamination across three pipeline roles.
+
+Disqualifiers applied strictly: RLAIF parse rate below 9/10, eval AB-BA consistency below 7/10, or failure to detect the \texttt{ood-03} collapse case (DPO-b01 producing a 51-item repetition loop on an Elixir prompt, included as a deliberate hard sanity check). Table~\ref{tab:calibration} reports the full results.
+
+\begin{table}[h]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llcccccccc}
+\toprule
+\textbf{Model} & \textbf{Maker} & \textbf{Size} & \shortstack{\textbf{RLAIF}\\\textbf{parse}} & \textbf{Reasoning} & \shortstack{\textbf{RLAIF}\\\textbf{budget}} & \shortstack{\textbf{Eval}\\\textbf{consistent}} & \textbf{ood-03} & \shortstack{\textbf{Eval}\\\textbf{budget}} \\
+\midrule
+\texttt{gemma-4} (control)  & Google       & 4B & 10/10         & yes           & 8.9 min  & 9/10          & \checkmark & 6.1 min \\
+\texttt{nemotron}            & NVIDIA       & 4B & \textbf{5/5}  & yes           & 5.4 min  & 4/5           & \checkmark & 3.1 min \\
+\texttt{granite-3.3}         & IBM          & 2B & 1/5           & yes           & 1.8 min  & \textbf{4/5}  & \checkmark & \textbf{1.4 min} \\
+\texttt{smollm3}             & Hugging Face & 3B & 5/5           & no            & 1.6 min  & 3/5           & $\times$   & 0.9 min \\
+\texttt{qwen3.5}             & Alibaba      & 4B & 1/5           & yes (capped)  & 91 min   & 0/5           & $\times$   & 31 min \\
+\texttt{ministral}           & Mistral      & 3B & 5/5           & yes (bimodal) & 48.8 min & 2/5           & \checkmark & 3.2 min \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Cross-judge calibration battery results. Bold entries are the passing scores on each metric. \texttt{nemotron} is assigned the RLAIF role; \texttt{granite-3.3} is assigned the eval role.}
+\label{tab:calibration}
+\end{table}
+
+Nemotron is assigned the RLAIF role: the only non-Gemma candidate with 100\% listwise parse rate, genuine chain-of-thought reasoning (4{,}898 characters on average, comparable to Gemma's 4{,}276), moderate Gemma disagreement (cross-judge signal is the goal), and a tractable 5.4-minute budget. Granite~3.3 is assigned the evaluation role: it matches Nemotron on every quality metric on the pairwise task, is faster (1.4 vs.\ 3.1 minutes), and belongs to a different model family, preserving cross-judge independence between the two roles. The limitation that this 10-call calibration probe did not surface: a structural position-bias ceiling on close pairs at production scale is the subject of Section~\ref{sec:limitations}.
+
+\subsection{RLAIF Judging}
+\label{sec:rlaif_judging}
+
+The judge receives a recruiter request and four numbered candidate postings. It applies the rubric in priority order: faithfulness to the request, structure and completeness (all four Markdown sections present and non-empty), professional language, and absence of repetition or truncation; and ends its response with a single parseable line:
+
+\begin{center}
+\texttt{RANKING: <best> > <2nd> > <3rd> > <worst>}
+\end{center}
+
+This full-ranking format produces six (higher, lower) pairs per prompt, multiplying the preference signal volume by six versus the best-worst variant used in earlier configurations (one pair per prompt). The judge runs deterministically (\texttt{temperature=0.0}, \texttt{max\_tokens=16384}, chain-of-thought enabled via \texttt{enable\_thinking=true}) through the \texttt{atlm\_rlaif\_judge} preset registered server-side on \texttt{agent\_server}, so the rubric is auditable independently of the notebook code.
+
+Of 250 prompts, 241 were ranked successfully (9 parse failures), yielding \textbf{1{,}446 preference triples}. This is a 6.5$\times$ expansion over the 222 best-worst triples produced in prior configurations on the same prompt set. Whether the volume increase translates to a DPO quality improvement is tested in Sections~\ref{sec:dpo} and~\ref{sec:limitations}.
+
+\end{document}
+
+
+
+\end{document}

@@ -1,0 +1,98 @@
+\documentclass[../main.tex]{subfiles}
+
+\begin{document}
+
+
+\section{DPO Training}
+\label{sec:dpo}
+
+\subsection{Method and Starting Point}
+\label{sec:dpo_method}
+
+Direct Preference Optimisation~\cite{rafailov2023dpo} (DPO) updates the policy so that, on the same prompt, it assigns higher log-probability to the chosen response than to the rejected one, regularised by KL divergence to a frozen reference. Compared with PPO-based RLHF it requires no separate reward model and no rollout loop, making it tractable on a single consumer GPU. TRL~1.5.1's \texttt{DPOTrainer} is used throughout.
+
+Following the same merge-between-stages pattern used at the Mini-Assignment~1 to SFT boundary, the SFT LoRA is first merged into the base with \texttt{merge\_and\_unload}, producing a consolidated checkpoint at \texttt{outputs/ma2-360m-sft-merged/}. A fresh LoRA is then trained on top for each DPO run. This keeps each stage's delta independent and avoids stacked-adapter arithmetic. The merged SFT checkpoint serves as both the policy initialisation and, implicitly, the reference: TRL computes reference log-probabilities by temporarily disabling the active adapter rather than loading a second model copy, saving a full model's worth of VRAM.
+
+Four DPO runs launch sequentially from a single idempotent training cell at $\beta \in $\{0.05, 0.10, 0.20, 0.30\}, all other hyperparameters held constant. Beta is the KL coefficient: lower values allow the policy to diverge further from the SFT reference (stronger preference learning); higher values keep it conservative. The fourth point at $\beta = 0.05$ was added as a deliberate cliff probe after a three-point sweep ($0.10$, $0.20$, $0.30$) returned a monotonically lower-is-better result that could not distinguish a true trend from a peak within the tested range.
+
+\subsection{Training Configuration}
+\label{sec:dpo_config}
+
+Table~\ref{tab:dpo_config} summarises the configuration shared across all four runs.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Hyperparameter} & \textbf{Value} \\
+\midrule
+\multicolumn{2}{l}{\textit{DPO-specific}} \\
+Beta values ($\beta$)     & 0.05, 0.10, 0.20, 0.30 \\
+Training triples          & 1{,}302 (90\% of 1{,}446; 144 held out for eval) \\
+\midrule
+\multicolumn{2}{l}{\textit{LoRA}} \\
+Rank $r$                  & 16 \\
+Scaling $\alpha$           & 32 \\
+Dropout                   & 0.05 \\
+Target modules            & all attention + FFN projections (7 matrices) \\
+\midrule
+\multicolumn{2}{l}{\textit{Training}} \\
+Epochs                    & 5 \\
+Learning rate             & 5\texttimes10$^{-5}$ \\
+Effective batch size      & 8 (micro-batch 2 $\times$ gradient accumulation 4) \\
+Max sequence length       & 1{,}024 tokens \\
+Precision                 & bf16 \\
+Seed                      & 42 \\
+Framework                 & HuggingFace TRL 1.5.1 \texttt{DPOTrainer} \\
+\bottomrule
+\end{tabular}
+\caption{DPO training configuration, shared across all four beta runs.}
+\label{tab:dpo_config}
+\end{table}
+
+The effective batch size is halved relative to SFT (8 vs.\ 16) because DPO performs a forward pass through both the chosen and rejected responses at every step, roughly doubling the memory footprint per batch. Five epochs over 1{,}302 triples was determined empirically: fewer epochs left reward margins near zero; at five epochs the training reward accuracy already saturates at 1.00 across all four betas, so additional epochs would not improve the training-side signal and risk further fluency degradation (see Section~\ref{sec:limitations}).
+
+\subsection{Learning Rate Sensitivity}
+\label{sec:lr_sensitivity}
+
+The learning rate required iteration. Three concrete values were tested at fixed $\beta = 0.10$:
+
+\begin{itemize}
+  \item $5 \times 10^{-6}$, the textbook DPO default for full fine-tuning: near-zero reward margins across all betas. The policy did not move meaningfully within the LoRA subspace.
+  \item $5 \times 10^{-5}$ (deliverable): clean positive margins, monotonic improvement in eval reward accuracy across the in-range betas, no fluency degradation. Section~\ref{sec:evaluation} confirms the same direction on the deployment-side win-rate.
+  \item $1 \times 10^{-4}$ (aborted): higher training-side reward margin than $5 \times 10^{-5}$, but visible fluency collapse on the held-out evaluation: including a hallucinated phrase appearing across multiple unrelated prompts and perplexity rising from 4.64 to 8.15.
+\end{itemize}
+
+The interpretation is that LoRA-DPO updates a small subspace of the full parameter space and requires a proportionally higher learning rate to move the reward function; but above $5 \times 10^{-5}$ the gradient signal from 1{,}446 triples is too concentrated in too few parameters and forces fluency collapse. The combination $(\beta = 0.10,\ \text{lr} = 5 \times 10^{-5})$ is the hyperparameter answer this work supports for LoRA-DPO on SmolLM2-360M with this preference set.
+
+\subsection{Training-Side Results}
+\label{sec:dpo_results}
+
+Table~\ref{tab:dpo_results} reports the held-out preference validation metrics for the four runs. Each run took approximately 30 minutes on the RTX~4090.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Metric} & $\beta = 0.05$ & $\beta = 0.10$ & $\beta = 0.20$ & $\beta = 0.30$ \\
+\midrule
+Eval loss               & 0.655 & 0.658 & 0.640 & 0.639 \\
+Eval reward accuracy    & 0.701 & \textbf{0.715} & 0.694 & 0.694 \\
+Eval reward margin      & 1.169 & 1.443 & 1.793 & 2.093 \\
+Eval entropy            & 1.047 & 1.209 & 1.413 & 1.502 \\
+Eval mean token acc.    & 0.580 & 0.621 & 0.649 & 0.660 \\
+Wall-clock (min)        & 29.7  & 29.5  & 29.1  & 29.1  \\
+\bottomrule
+\end{tabular}
+\caption{DPO training-side metrics on the held-out preference validation set. Reward margin scales linearly with $\beta$ by construction and is not a cross-beta quality indicator. Eval reward accuracy (bold at $\beta = 0.10$) is the comparable metric.}
+\label{tab:dpo_results}
+\end{table}
+
+Two readings from the table deserve explicit note. First, the reward margin row is not a finding: by the DPO loss definition, margin equals $\beta$ times the chosen-minus-rejected log-ratio, so a higher margin at higher $\beta$ is a mathematical identity, not an alignment signal. The cross-beta quality metric is eval reward accuracy, which peaks at $\beta = 0.10$ (0.715) and is lower at both ends of the sweep. Second, entropy and mean token accuracy decrease monotonically as $\beta$ falls, with $\beta = 0.05$ producing the most confident, most SFT-divergent policy, the precondition for the inference-time mode-collapse documented in Section~\ref{sec:limitations}. These training-side numbers measure alignment on training-distribution preferences; whether they predict deployment-side quality is the question Section~\ref{sec:evaluation} answers.
+
+\end{document}
+
+
+\end{document}

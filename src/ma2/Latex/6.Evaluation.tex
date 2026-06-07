@@ -1,0 +1,125 @@
+\documentclass[../main.tex]{subfiles}
+
+
+\begin{document}
+
+\section{Comparative Evaluation}
+\label{sec:evaluation}
+
+The evaluation compares six model states on a fixed set of twenty recruiter prompts: the untrained base SmolLM2-360M, the SFT model, and the four DPO-aligned variants at $\beta \in \{0.05, 0.10, 0.20, 0.30\}$. Three complementary instruments are used: automatic perplexity, LLM-as-judge pairwise win-rate with order-swap control, and behavioural surface statistics; followed by a synthesis.
+
+\subsection{Evaluation Set}
+\label{sec:eval_set}
+
+The 20 prompts were fixed before any DPO training, eliminating the possibility of post-hoc cherry-picking. They split into two sub-sets of ten:
+
+\begin{itemize}
+  \item \textbf{In-distribution (ind-01--ind-10).} Queries written in the style of the SFT training data but not drawn from it. These measure in-domain instruction quality.
+  \item \textbf{Out-of-distribution (ood-01--ood-10).} Deliberately varied prompts: a junior bootcamp hire with no fixed stack, a principal staff engineer, niche stacks (Elixir/OTP, Rust/ WebAssembly, low-latency C++), a freelance documentation writer, a soft-skills-heavy role, and a remote-async senior Go engineer. These probe generalisation beyond the training distribution.
+\end{itemize}
+
+All six models are evaluated with greedy decoding, \texttt{repetition\_penalty=1.3}, and \texttt{max\_new\_tokens=800}, matching the Mini-Assignment~1 inference helper for the first two kwargs. The Section~\ref{sec:sft} sanity-check generations use the same decoder configuration with \texttt{max\_new\_tokens=400}; the Section~\ref{sec:preference_dataset} candidate sampling uses \texttt{temperature=0.9}, \texttt{top\_p=0.95}, \texttt{num\_return\_sequences=4} and \texttt{max\_new\_tokens=500}. The role of \texttt{repetition\_penalty} in preventing token-loop collapse is detailed in Section~\ref{sec:limitations}.
+
+\subsection{Perplexity}
+\label{sec:eval_perplexity}
+
+Perplexity is computed on the 750-example SFT validation set (the 250 held-out records, three queries each, formatted with the Section~\ref{sec:prompt_template} template). It measures how well each model fits the instruction-following distribution, independent of any judge.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lc}
+\toprule
+\textbf{Model} & \textbf{Perplexity} \\
+\midrule
+Base (SmolLM2-360M)  & 11.66 \\
+SFT                  & \textbf{4.54} \\
+DPO-$\beta$=0.30     & 4.80 \\
+DPO-$\beta$=0.20     & 5.03 \\
+DPO-$\beta$=0.10     & 6.01 \\
+DPO-$\beta$=0.05     & 8.84 \\
+\bottomrule
+\end{tabular}
+\caption{Perplexity on the SFT validation set (lower is better). Models sorted by perplexity. The base model is high because it has never seen the instruction template.}
+\label{tab:perplexity}
+\end{table}
+
+SFT sets the floor (4.54). DPO perplexity rises smoothly as $\beta$ decreases from 0.30 to 0.10 (4.80 to 5.03 to 6.01), reflecting the expected alignment-fluency trade-off: lower beta allows the policy to diverge further from the SFT distribution. Below $\beta = 0.10$ a sharp cliff appears: DPO-$\beta$=0.05 reaches 8.84, a 47\% jump over DPO-$\beta$=0.10. This is the first signal that $\beta = 0.05$ crosses the point where alignment gain no longer compensates for SFT-distribution divergence.
+
+\subsection{LLM-as-Judge Win-Rate}
+\label{sec:eval_winrate}
+
+Pairwise win-rates are computed between every combination of the six model states. Six models yield 15 pairs; each pair is evaluated on all 20 prompts in both AB and BA orderings, giving 600 judge calls to Granite~3.3~2B via the \texttt{atlm\_eval\_judge} preset. An order-swap protocol filters position bias: only when both orderings agree is the pair-prompt counted as a consistent verdict; disagreement is recorded as inconsistency. Table~\ref{tab:winrate} reports the results.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrrc}
+\toprule
+\textbf{Comparison} & \textbf{A wins} & \textbf{B wins} & \textbf{Incons.} & \textbf{Agree.} & \textbf{Winner} \\
+\midrule
+\multicolumn{6}{l}{\textit{Base vs.\ aligned}} \\
+Base vs.\ SFT          & 0 & 7  & 13 & 35\% & SFT \\
+Base vs.\ DPO-b005     & 2 & 13 &  5 & 75\% & DPO-b005 \\
+Base vs.\ DPO-b01      & 0 & 18 &  2 & 90\% & DPO-b01 \\
+Base vs.\ DPO-b02      & 1 & 14 &  5 & 75\% & DPO-b02 \\
+Base vs.\ DPO-b03      & 1 & 12 &  7 & 65\% & DPO-b03 \\
+\midrule
+\multicolumn{6}{l}{\textit{SFT vs.\ DPO}} \\
+SFT vs.\ DPO-b005      & 2 &  7 & 11 & 45\% & DPO-b005 \\
+SFT vs.\ DPO-b01       & 0 &  8 & 12 & 40\% & DPO-b01 \\
+SFT vs.\ DPO-b02       & 0 &  6 & 14 & 30\% & DPO-b02 \\
+SFT vs.\ DPO-b03       & 0 &  4 & 16 & 20\% & DPO-b03 \\
+\midrule
+\multicolumn{6}{l}{\textit{DPO vs.\ DPO (close pairs)}} \\
+DPO-b005 vs.\ DPO-b01  & 2 &  1 & 17 & 15\% & --- \\
+DPO-b005 vs.\ DPO-b02  & 5 &  2 & 13 & 35\% & DPO-b005 \\
+DPO-b005 vs.\ DPO-b03  & 5 &  1 & 14 & 30\% & DPO-b005 \\
+DPO-b01 vs.\ DPO-b02   & 3 &  0 & 17 & 15\% & DPO-b01 \\
+DPO-b01 vs.\ DPO-b03   & 5 &  1 & 14 & 30\% & DPO-b01 \\
+DPO-b02 vs.\ DPO-b03   & 2 &  0 & 18 & 10\% & DPO-b02 \\
+\bottomrule
+\end{tabular}
+\caption{Pairwise win-rate matrix. Consistent verdicts only (inconsistent pairs excluded from win counts). Agreement is the fraction of the 20 prompts where both orderings agreed. DPO-b005 vs.\ DPO-b01 is marked ``---'' as effectively tied (2-1, 85\% inconsistency).}
+\label{tab:winrate}
+\end{table}
+
+Three patterns stand out. First, the base model loses to every aligned model regardless of $\beta$: it produces no structured postings and the judge commits against it with 65--90\% AB-BA agreement. Second, on the SFT vs.\ DPO pairs, DPO wins every consistent verdict on the three in-range betas (18 of 18 across the SFT-vs-DPO-b01, b02 and b03 pairs, zero losses). On the SFT vs.\ DPO-b005 pair the signal weakens (7 DPO wins, 2 SFT wins on consistent verdicts), the first hint of the $\beta=0.05$ cliff that perplexity flags more sharply in Section~\ref{sec:eval_perplexity}. The signal is real but narrow given the low agreement rates on close pairs (20--45\%), a judge-ceiling effect discussed in Section~\ref{sec:limitations}. Third, among the DPO-vs-DPO close pairs, the within-range betas sort lower-preferred (b01 $>$ b02 $>$ b03) when Granite commits, while DPO-b005 beats b02 and b03 but is effectively tied with b01 (2-1, 15\% agreement).
+
+\subsection{Behavioural Statistics}
+\label{sec:eval_behavioural}
+
+Table~\ref{tab:behavioural} reports surface metrics across all 120 generated outputs (six models, 20 prompts each).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Model} & \textbf{Mean chars} & \textbf{Mean words} & \textbf{All 4 sections} & \textbf{Avg.\ sections} \\
+\midrule
+Base           &   694 &  89 &  0/20 & 0.00 \\
+SFT            & 1{,}567 & 208 &  3/20 & 2.80 \\
+DPO-b005       &   869 & 119 &  0/20 & 1.35 \\
+DPO-b01        & 1{,}458 & 196 &  1/20 & 2.50 \\
+DPO-b02        & 1{,}622 & 216 &  0/20 & 2.45 \\
+DPO-b03        & 1{,}592 & 211 &  3/20 & 2.85 \\
+\bottomrule
+\end{tabular}
+\caption{Behavioural statistics across all 20 evaluation prompts. ``All 4 sections'' counts how many of the 20 generations contained all four required Markdown headings. ``Avg.\ sections'' is the mean number of required headings present per generation.}
+\label{tab:behavioural}
+\end{table}
+
+The base model produces no Markdown structure. SFT and the in-range DPO models produce outputs of comparable length (1{,}458-1{,}622 characters), consistently including \texttt{\#\# Summary} and \texttt{\#\# Required Skills}, but trailing off on \texttt{\#\# Responsibilities} and \texttt{\#\# Requirements}. DPO-b005 is the outlier: at a mean of 869 characters it is roughly 40\% shorter than DPO-b01 and averages only 1.35 required sections per generation, worse than SFT on every structural metric. The entropy collapse visible in the training-side metrics (Table~\ref{tab:dpo_results}) manifests at inference as truncated, low-diversity outputs.
+
+\subsection{Synthesis}
+\label{sec:eval_synthesis}
+
+The three instruments agree on the headline ranking. Base loses to every aligned model. Among the aligned models, the in-range DPO betas (0.10, 0.20, 0.30) improve over SFT on judge-consistent verdicts (DPO wins 18 of 18 consistent pair-prompt comparisons across the three SFT-vs-DPO pairs, zero losses). On the perplexity axis the DPO models stay within a proportionate range of SFT (4.80--6.01), and their structural output statistics are comparable to SFT. The $\beta = 0.05$ probe breaks this pattern on every axis: a 47\% perplexity jump, a 40\% drop in mean output length, and structural statistics worse than SFT, combined with a win-rate signal at the noise floor (DPO-b005 vs.\ DPO-b01 is 2-1 with 85\% inconsistency). Among the tested configurations, $\beta = 0.10$ is the strongest candidate by every measurable axis (eval reward accuracy peak at 0.715; consistent close-pair win-rate; proportionate perplexity rise); the low close-pair agreement rates documented in Section~\ref{sec:limitations} prevent a statistically robust ranking between the three in-range DPO variants.
+
+Among the in-range betas, perplexity is lowest at $\beta = 0.30$ (4.80) and rises monotonically as $\beta$ decreases, while reward accuracy peaks at $\beta = 0.10$ (0.715) and consistent close-pair verdicts sort lower-beta-preferred. Selecting the deliverable prioritises the alignment metrics (preference accuracy and pairwise win-rate) over absolute fit to the SFT distribution, provided perplexity remains within a proportionate range of SFT (which it does at $\beta = 0.10$: 6.01 vs SFT's 4.54, a 32\% rise). The deliverable policy is \textbf{DPO-b01} ($\beta = 0.10$, learning rate $5 \times 10^{-5}$): it beats the base 18-0 with 90\% judge agreement, beats SFT 8-0 in consistent verdicts, and shows no fluency collapse. Structural completeness is comparable to SFT (1/20 vs 3/20 all-four-section generations; 2.50 vs 2.80 average sections per generation): a small decrement that is a known cost of restoring \texttt{repetition\_penalty=1.3}, which occasionally triggers an early EOS before the model reaches \texttt{\#\# Requirements}. Section~\ref{sec:limitations} documents this trade-off.
+
+\end{document}
+
+
+\end{document}

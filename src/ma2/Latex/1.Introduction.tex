@@ -1,0 +1,40 @@
+\documentclass[../main.tex]{subfiles}
+
+\begin{document}
+
+\section{Introduction}
+\label{sec:introduction}
+
+Mini-Assignment~1 produced SmolLM2-360M \cite{smollm2}, a decoder model adapted to the IT job-postings domain by continued next-token pretraining on raw Djinni descriptions. The resulting checkpoint is a domain-fluent text completer: given a partial posting it can continue it, but it cannot take a sentence-length recruiter request and produce a complete, structured job posting from it. Mini-Assignment~2 is the alignment stage that adds that capability.
+
+Alignment proceeds in two sub-stages, both implemented in the accompanying notebook and covered by this report. \textbf{Supervised fine-tuning} (SFT) teaches the model to recognise a recruiter request and produce a structured response by training on roughly 7{,}500 (query, posting) pairs. \textbf{Preference alignment} via Direct Preference Optimisation \cite{rafailov2023dpo} (DPO) then refines those responses against a written rubric, faithfulness to the request, four required Markdown sections, professional language, absence of repetition, using preferences ranked by a separate local LLM acting as judge, a setup known as Reinforcement Learning from AI Feedback \cite{bai2022constitutional} (RLAIF).
+
+Three external LLMs participate across the pipeline, assigned to non-overlapping roles to avoid shared-prior contamination. Gemma~4~E2B acts as the ETL teacher that generated the SFT corpus and plays no judge role. Nemotron~Nano~4B is the RLAIF listwise judge that produced the preference triples. Granite~3.3~2B is the pairwise evaluation judge. Both judge models were selected from a six-candidate calibration battery; the selection rationale is detailed in Section~\ref{sec:preference_dataset}.
+
+The report walks the full pipeline and ends with a six-way comparison on a fixed set of twenty held-out recruiter prompts: the untrained base, the SFT model, and four DPO-aligned variants at $\beta \in \{0.05, 0.10, 0.20, 0.30\}$. The deliverable policy is DPO-$\beta$=0.10. Section~\ref{sec:limitations} documents the failure modes discovered during execution, including an inference-time regression that produced catastrophic token-loop collapses, and the structural discrimination ceiling of the evaluation judge on close-pair comparisons.
+
+\subsection{Pipeline Overview}
+\label{sec:pipeline_overview}
+
+Table~\ref{tab:pipeline} summarises the four training stages. Mini-Assignment~2 covers the last two.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{clll}
+\toprule
+\textbf{Stage} & \textbf{Name} & \textbf{Capability added} & \textbf{Assignment} \\
+\midrule
+1 & Pretraining          & General language understanding         & (authors of SmolLM2) \\
+2 & Continued pretraining & Domain fluency on IT job postings     & Mini-Assignment~1 \\
+3 & Supervised fine-tuning & Recruiter instruction following       & Mini-Assignment~2 \\
+4 & Preference alignment  & Rubric-consistent output quality       & Mini-Assignment~2 \\
+\bottomrule
+\end{tabular}
+\caption{Four-stage post-training pipeline. Each stage adds a distinct capability on top of the previous checkpoint.}
+\label{tab:pipeline}
+\end{table}
+
+\end{document}
+
+\end{document}

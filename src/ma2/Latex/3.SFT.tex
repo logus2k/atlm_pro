@@ -1,0 +1,126 @@
+\documentclass[../main.tex]{subfiles}
+
+\begin{document}
+
+\section{Supervised Fine-Tuning}
+\label{sec:sft}
+
+\subsection{Rationale}
+\label{sec:sft_rationale}
+
+DPO and other preference-alignment methods assume the policy already follows instructions: they refine the \emph{quality} of responses, not the \emph{format}. A domain-adapted text completer does not satisfy that precondition. Supervised fine-tuning bridges the gap by training the model explicitly on (request, response) pairs so it learns where a recruiter prompt ends and where a structured posting should begin.
+
+\subsection{Training Configuration}
+\label{sec:sft_config}
+
+A fresh LoRA adapter is trained on top of the merged Mini-Assignment~1 checkpoint, leaving the 361.8M base weights frozen. The LoRA shape matches the Mini-Assignment~1 adapter: rank 16, scaling factor 32, dropout 0.05, applied to all seven attention and feed-forward projection matrices (\texttt{q\_proj}, \texttt{k\_proj}, \texttt{v\_proj}, \texttt{o\_proj}, \texttt{gate\_proj}, \texttt{up\_proj}, \texttt{down\_proj}), so the alignment delta at the next stage is comparable. Table~\ref{tab:sft_config} summarises the full configuration.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Hyperparameter} & \textbf{Value} \\
+\midrule
+\multicolumn{2}{l}{\textit{LoRA}} \\
+Rank $r$ & 16 \\
+Scaling $\alpha$ & 32 \\
+Dropout & 0.05 \\
+Target modules & all attention + FFN projections (7 matrices) \\
+\midrule
+\multicolumn{2}{l}{\textit{Training}} \\
+Epochs & 2 \\
+Learning rate & 2\texttimes10$^{-4}$ \\
+Effective batch size & 16 (micro-batch 4 $\times$ gradient accumulation 4) \\
+Max sequence length & 1{,}024 tokens \\
+Precision & bf16 \\
+Warmup ratio & 0.03 \\
+Weight decay & 0.01 \\
+Seed & 42 \\
+Framework & HuggingFace TRL 1.5.1 \texttt{SFTTrainer} \\
+\bottomrule
+\end{tabular}
+\caption{Supervised fine-tuning configuration.}
+\label{tab:sft_config}
+\end{table}
+
+Two epochs is deliberately short. The goal of this stage is to teach the instruction-following format, not to re-adapt to the domain; over-training here would erode the domain knowledge acquired in Mini-Assignment~1. A maximum sequence length of 1{,}024 tokens covers every (query, posting) pair without truncation and matches the tokenisation cap used in Mini-Assignment~1.
+
+The loss is computed over the entire formatted sequence: preamble, request field, and response field; rather than only the response tokens. Masking the prompt span would be the theoretically cleaner choice; for a model of this size the difference is minor and the simpler configuration was retained.
+
+\subsection{Results}
+\label{sec:sft_results}
+
+The run completed in 17.4 minutes on a single RTX 4090 (24~GB). Table~\ref{tab:sft_results} records the key outcomes.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lr}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Trainable parameters (LoRA) & 8{,}683{,}520 \\
+Trainable / total parameters & 2.34\% of 370.5M \\
+Training examples & 6{,}771 \\
+Validation examples & 750 \\
+Final validation loss & 1.4955 \\
+Final validation perplexity & 4.46 \\
+Wall-clock time & 17.4 min (RTX 4090) \\
+\bottomrule
+\end{tabular}
+\caption{Supervised fine-tuning outcomes.}
+\label{tab:sft_results}
+\end{table}
+
+The 750 validation examples correspond to the 250 held-out records times three queries, confirming that the record-level split from Section~\ref{sec:sft_data} held correctly.
+
+\subsection{Sanity Check}
+\label{sec:sft_sanity}
+
+A qualitative check runs the same recruiter prompt through both the merged Mini-Assignment 1 model and the SFT model with greedy decoding. The pre-SFT model treats the prompt as a free-continuation task: it begins with loosely relevant sentences and quickly degrades into hallucinated lists of unrelated occupations. The SFT model recognises the prompt as an instruction, emits a title and the four required Markdown sections (\texttt{\#\# Summary}, \texttt{\#\# Required Skills}, \texttt{\#\# Responsibilities}, \texttt{\#\# Requirements}), and stays on topic throughout. Figure~\ref{fig:sft_sanity} illustrates this contrast on the Senior Data Scientist prompt.
+
+\begin{figure}[h]
+\centering
+\small
+\fbox{\parbox{0.44\textwidth}{%
+  \textbf{MA1 only - text completer}\\[4pt]
+  The post is open to all candidates who have at
+  least 2 years experience\ldots\\[2pt]
+  Requirements:\\
+  \textendash\ Experience working as an Assistant;\\
+  \textendash\ Basic knowledge of statistics\ldots\\[4pt]
+  \textit{[degrades into unrelated occupations:]}\\[2pt]
+  \ldots massage therapist, acupuncturist,
+  hypnotist, yoga teacher, martial arts
+  instructors\ldots
+}}%
+\hfill
+\fbox{\parbox{0.44\textwidth}{%
+  \textbf{MA1 + SFT - instruction follower}\\[4pt]
+  {\ttfamily\# Junior/Senior ML Engineer}\\[2pt]
+  {\ttfamily\#\# Summary}\\
+  This role involves working closely with data
+  scientists\ldots\\[2pt]
+  {\ttfamily\#\# Required Skills}\\
+  \textendash\ Advanced proficiency in Python\ldots\\[2pt]
+  {\ttfamily\#\# Responsibilities}\\
+  \textendash\ Developing new features\ldots\\[2pt]
+  {\ttfamily\#\# Requirements}\\
+  \textendash\ 3+ years of experience\ldots
+}}
+\caption{Sanity check after SFT. Left: the MA1 model
+continues text freely and degrades into hallucinated
+content. Right: the SFT model recognises the prompt as
+an instruction and produces the required Markdown
+structure. Same prompt, greedy decoding.}
+\label{fig:sft_sanity}
+\end{figure}
+
+
+The full six-way comparison across all model states is deferred to Section~\ref{sec:evaluation}, where the same fixed prompt set and order-swap protocol are applied to all models simultaneously.
+
+\end{document}
+
+
+\end{document}

@@ -1,0 +1,72 @@
+\documentclass[../main.tex]{subfiles}
+ 
+\begin{document}
+
+
+\section{Limitations and Critical Discussion}
+\label{sec:limitations}
+
+Every finding in this section is grounded in a specific file or measurement produced during execution of Section~\ref{sec:evaluation}; none is asserted from first principles.
+
+\subsection{Decoder-Loop Attractor and the Inference-Helper Regression}
+\label{sec:decoder_loop}
+
+The first execution of Section~\ref{sec:evaluation} produced catastrophic token-level repetition collapses on several DPO outputs. The clearest case: DPO-$\beta$=0.20 on the cloud-engineer prompt \texttt{ind-07} emitted a Required Skills bullet in which the AWS service token \texttt{SQS} repeated 171 times in a comma-separated list before EOS; DPO-$\beta$=0.30 on the same prompt emitted an escalating-bullet degeneration in which the \texttt{ECS} token grew across consecutive bullet items (\texttt{`ECS Pods'}, \texttt{`ECS ECS Pods'}, \texttt{`ECS ECS ECS Pods'}, \ldots) for over 25 lines. These outputs actively confounded the evaluation judge: close-pair AB-BA agreement floored at 5-15\%, well below the 50\% expected from random and consistent with near-pure position bias in Granite's verdicts.
+
+Two diagnostic findings followed that the training-side metrics could not have produced. First, the SFT corpus (\texttt{converted.jsonl}, 2{,}507 records) contains the phrase ``Container orchestration using'' exactly seven times, once per record at most. The failure is not memorised from training; it is emergent at inference under greedy decoding without a repetition penalty. Second, and more directly: the Mini-Assignment~1 inference helper \texttt{src/generate\_mp1.py} carries \texttt{repetition\_penalty=1.3} with the explicit comment \emph{``small continued-pretrained models loop easily''}. The Mini-Assignment~2 evaluation generation function dropped this kwarg, silently, across notebook versions v3 through v6. Restoring \texttt{repetition\_penalty=1.3} eliminated all token-loop collapses across the full 120-output evaluation run (six models, 20 prompts). Close-pair AB-BA agreement recovered to 15-40\%, off the position-bias floor, and the DPO-over-SFT signal partially surfaced.
+
+The methodological lesson is that inference-time decoder kwargs are load-bearing pipeline components, not afterthoughts. A parameter that solved the same failure mode on the same model family one assignment earlier was a silent regression in this one, producing apparent methodology-grade failures that training-side metrics could not detect. Cross-stage inference-kwarg parity is now a delivery checklist item.
+
+\subsection{Eval Judge Discrimination Ceiling}
+\label{sec:judge_ceiling}
+
+Granite~3.3~2B was selected from the calibration battery on the strength of a 10-call probe (5 pairs $\times$ 2 orderings). At production scale on 600 calls, a structural discrimination ceiling emerged that the calibration did not surface: on easy pairs (base vs.\ any aligned model) Granite produces 65-90\% AB--BA agreement, but on close pairs (SFT vs.\ DPO, DPO vs.\ DPO) agreement falls to 15-40\% even after the decoder-loop fix.
+
+The arithmetic is informative. A purely random judge would produce 50\% AB-BA agreement (independent coin flips). A purely position-biased judge would produce 0\% (it always selects the candidate in a fixed slot; swapping the order swaps which model occupies that slot). The 15-40\% close-pair regime lies between random and the pure-position-bias floor, consistent with partial signal recovery once catastrophic outputs were removed, but still far from the 65-90\% Granite achieves on easy pairs. Inspection of raw verdicts revealed Granite occasionally identifying a response weakness in its reasoning text and then voting for that response anyway, suggesting the rubric application is at the edge of what a 2B-parameter model can do reliably on fine-grained comparisons.
+
+The underlying cause is the calibration sample size. A 10-call probe is statistically incapable of distinguishing 80\% AB-BA agreement from 50\% at any meaningful confidence; only production-scale evaluation surfaces the floor. A close-pair-only calibration with $N \geq 30$ would have flagged the issue before the pipeline was built on it. This ceiling bounds the interpretability of the DPO-vs-DPO win-rate numbers in Table~\ref{tab:winrate}: the directional ordering among the in-range betas (b01 $>$ b02 $>$ b03) is consistent but rests on small consistent-verdict counts. The b005 close-pair counts are not usable for ranking in isolation --- b005 beats b02 and b03 on consistent verdicts (5-2 and 5-1) but ties b01 (2-1, 15\% agreement), a result at the noise floor that contradicts the perplexity and structural evidence placing b005 clearly last.
+
+\subsection{DPO Coverage Bound}
+\label{sec:dpo_coverage}
+
+DPO can only suppress failure modes that appear in the candidate distribution used to build the preference dataset. The \texttt{ind-07} SFT defect (a tendency to fill the Required Skills section with near-duplicate ``Container orchestration using X'' bullets) is a prompt not included in the 250 preference prompts drawn in Section~\ref{sec:pref_prompts}. DPO received no gradient signal pointing at this specific failure, which is why the defect persisted across all four DPO variants and surfaced as the token-loop catastrophes in the first evaluation execution. This is a concrete instance of a theoretical bound: DPO refines the policy in the regions where the candidate distribution and the judge's preferences both provide signal; outside those regions, SFT behaviour passes through unchanged.
+
+\subsection{Evaluation Set Size and Preference Volume}
+\label{sec:scale_limits}
+
+The 20-prompt evaluation set is sufficient for the headline base-versus-aligned gap and for detecting cross-beta directional differences when the judge commits, but binomial confidence intervals on close comparisons are wide. The 8-0 DPO sweep over SFT is robust at $N = 20$; the 3-0 b01-over-b02 close-pair count is suggestive rather than conclusive; the 2-1 b005-versus-b01 result is at the noise floor. Section~\ref{sec:eval_synthesis}'s deliverable claim (b01 is the best-aligned model) rests on the robust end of these numbers; the within-range DPO ordering carries wider uncertainty.
+
+The 6.5$\times$ scaling of preference triples (222 best-worst triples in Configurations~B and C to 1{,}446 full-ranking triples in v6) did not break the over-fit signature: training reward accuracy reached 1.00 across all four betas in v6, equivalent to the near-saturation seen in prior configurations. It did not move the close-pair judge discrimination floor, and it did not produce a detectable deployment-quality lift. Preference-data volume was not the binding constraint for this setup. The bottleneck was preference-signal noise and the judge's discrimination ceiling.
+
+\subsection{Iteration History as a Methodological Finding}
+\label{sec:iteration_history}
+
+The pipeline reached its final form through four configurations, each motivated by the previous iteration's failure:
+
+\begin{itemize}
+  \item \textbf{Configuration A} (Gemma judge): \texttt{max\_tokens=800} caused 99\% parse failures on the listwise ranking task; the judge's chain-of-thought alone exceeds 4{,}000 characters. Lifting to \texttt{max\_tokens=16384} fixed it.
+  \item \textbf{Configuration B} (Gemma judge, fixed): produced a decisive ``DPO-b01 wins'' narrative, but grounded in Gemma's own stylistic preferences: Gemma was the ETL teacher that shaped the SFT corpus, the RLAIF judge that ranked the preference candidates, and the evaluation judge that scored the result. Any Gemma prior compounded three times.
+  \item \textbf{Configuration C} (cross-judge: Nemotron RLAIF, Granite eval): broke the shared-prior loop. The \texttt{ood-03} collapse that b01 exhibited under Configuration~B: a 51-item repetition loop on an Elixir prompt, disappeared entirely under Configuration~C, confirming it was a Gemma-judge artefact rather than a low-$\beta$ intrinsic failure. Granite's close-pair discrimination ceiling surfaced.
+  \item \textbf{v6} (consolidated four-beta, full-ranking, \texttt{repetition\_penalty} restored): added the $\beta = 0.05$ cliff probe, scaled preferences to 1{,}446 triples, and fixed the decoder-loop regression that had contaminated all prior evaluation runs.
+\end{itemize}
+
+The full set of configuration artefacts is preserved on disk under suffixed output directories, making the trajectory reproducible independently of this report.
+
+\subsection{Future Work}
+\label{sec:future_work}
+
+Prioritised by expected impact:
+
+\begin{enumerate}
+  \item \textbf{Larger evaluation judge.} A Gemma-class or Qwen3.5-9B-class model, or a judge ensemble, would raise the close-pair discrimination ceiling and make the DPO-vs-DPO ordering statistically interpretable. This is the single largest bound on what this evaluation could measure.
+  \item \textbf{Larger evaluation set.} At $N \geq 200$ stratified prompts, close-pair binomial confidence intervals shrink to the point where 3-0 or 5-1 counts become statistically meaningful.
+  \item \textbf{Full ($\beta \times$ LR) sensitivity grid with replication.} The current probe is one-dimensional along $\beta$ at fixed LR. A grid sweep would map the interaction surface and quantify whether the b01 peak shifts at different learning rates.
+  \item \textbf{SFT corpus quality.} The \texttt{ind-07} defect is one concrete example of a patterned list shape the teacher model occasionally generates and the student memorises. Filtering or a higher-quality teacher would reduce inherited structural defects.
+\end{enumerate}
+
+\end{document}
+
+
+
+
+\end{document}
