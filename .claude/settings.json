@@ -6,7 +6,14 @@
       "Read(//home/logus/env/assets/agent_server/documents/**)",
       "Bash(ls -la /tmp/test_rlaif_judge.py /tmp/test_eval_judge.py /tmp/compare_judges.py 2>&1)",
       "Read(//tmp/**)",
-      "Bash(pdfinfo \"src/ma2/delivery/main \\(27\\).pdf\")"
+      "Bash(pdfinfo \"src/ma2/delivery/main \\(27\\).pdf\")",
+      "WebFetch(domain:resources.workable.com)",
+      "WebFetch(domain:www.notion.com)",
+      "WebFetch(domain:handbook.gitlab.com)",
+      "WebFetch(domain:microsoft.github.io)",
+      "WebFetch(domain:dormytech.com)",
+      "WebSearch",
+      "Read(//home/logus/env/assets/noted/backend/app/routers/**)"
     ],
     "additionalDirectories": [
       "/tmp"
