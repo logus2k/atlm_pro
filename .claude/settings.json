@@ -13,7 +13,9 @@
       "WebFetch(domain:microsoft.github.io)",
       "WebFetch(domain:dormytech.com)",
       "WebSearch",
-      "Read(//home/logus/env/assets/noted/backend/app/routers/**)"
+      "Read(//home/logus/env/assets/noted/backend/app/routers/**)",
+      "Bash(ls /home/logus/env/iscte/atlm_pro/src/ma2/ | grep -E \"merge|gguf|quant\" 2>/dev/null *)",
+      "Read(//home/logus/env/assets/**)"
     ],
     "additionalDirectories": [
       "/tmp"
